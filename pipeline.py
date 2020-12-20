@@ -6,11 +6,11 @@ import nvidia.dali.plugin.tf as dali_tf
 import tensorflow as tf
 
 
-class Yolov4Pipeline(Pipeline):
+class YOLOv4Pipeline(Pipeline):
     def __init__(self, file_root, annotations_file,
                  batch_size, image_size,
                  num_threads, device_id, seed):
-        super(Yolov4Pipeline, self).__init__(
+        super(YOLOv4Pipeline, self).__init__(
             batch_size,
             num_threads,
             device_id,
