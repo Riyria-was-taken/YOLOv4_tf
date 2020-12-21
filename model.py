@@ -39,17 +39,18 @@ class YOLOv4Model:
 
         return feed
 
-    def darknetResidualBlock(self, filters, repeats=1):
+    def darknetResidualBlock(self, filters, repeats=1, initial=False):
         def feed(x):
+            filters2 = 2 * filters if initial else filters
             x = self.darknetConv(2 * filters, 3, strides=2)(x)
-            x = self.darknetConv(filters, 1)(x)
+            x = self.darknetConv(filters2, 1)(x)
             route = x
             for i in range(repeats):
                 skip = x
                 x = self.darknetConv(filters, 1)(x)
-                x = self.darknetConv(filters, 3)(x)
+                x = self.darknetConv(filters2, 3)(x)
                 x = tf.keras.layers.Add()([skip, x])
-            x = self.darknetConv(filters, 1)(x)
+            x = self.darknetConv(filters2, 1)(x)
             x = tf.concat([x, route], axis=-1)
             x = self.darknetConv(2 * filters, 1)(x)
             return x
@@ -59,7 +60,7 @@ class YOLOv4Model:
     def CSPDarknet53WithSPP(self):
         def feed(x):
             x = self.darknetConv(32, 3)(x)
-            x = self.darknetResidualBlock(32)(x)
+            x = self.darknetResidualBlock(32, initial=True)(x)
             x = self.darknetResidualBlock(64, repeats=2)(x)
             x = r1 = self.darknetResidualBlock(128, repeats=8)(x)
             x = r2 = self.darknetResidualBlock(256, repeats=8)(x)
@@ -72,12 +73,12 @@ class YOLOv4Model:
             spp1 = tf.keras.layers.MaxPooling2D(
                 pool_size=13, strides=1, padding="same"
             )(x)
-            spp2 = tf.keras.layers.MaxPooling2D(pool_size=9, strides=1, padding="same")(
-                x
-            )
-            spp3 = tf.keras.layers.MaxPooling2D(pool_size=5, strides=1, padding="same")(
-                x
-            )
+            spp2 = tf.keras.layers.MaxPooling2D(
+                pool_size=9, strides=1, padding="same"
+            )(x)
+            spp3 = tf.keras.layers.MaxPooling2D(
+                pool_size=5, strides=1, padding="same"
+            )(x)
             x = tf.keras.layers.Concatenate()([spp1, spp2, spp3, x])
 
             x = self.darknetConv(512, 1, activation="leaky")(x)
@@ -86,6 +87,27 @@ class YOLOv4Model:
             return r1, r2, x
 
         return feed
+
+    def yoloConvBlock(self, filters):
+        def feed(x):
+            x = self.darknetConv(filters, 1)
+            x = tf.keras.layers.UpSampling2D()(x)
+            route = self.darknetConv(filters, 1)
+            x = tf.keras.layers.Concatenate()([route, x])
+
+            x = self.darknetConv(filters, 1)(x)
+            x = self.darknetConv(2 * filters, 3)(x)
+            x = self.darknetConv(filters, 1)(x)
+            x = self.darknetConv(2 * filters, 3)(x)
+            x = self.darknetConv(filters, 1)(x)
+
+            return x, route
+
+        return feed
+
+    def YOLOHead(self, num_classes):
+        def feed(route_1, route_2, x):
+            x
 
     def __call__(self, input):
         return self.model.predict(input)
