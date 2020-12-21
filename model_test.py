@@ -3,4 +3,5 @@ import numpy as np
 
 input = np.random.random([1, 608, 608, 3])
 model = YOLOv4Model((608, 608))
-print(model(input).shape)
+for x in model(input):
+    print(x.shape)
