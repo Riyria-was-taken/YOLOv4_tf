@@ -1,10 +1,6 @@
 import tensorflow as tf
+from layers import Mish
 
-def Mish():
-    def mish(x):
-        return x * tf.tanh(tf.math.log(1 + tf.exp(x)))
-
-    return tf.keras.layers.Activation(mish)
 
 class YOLOv4Model:
     def __init__(self, image_size):
@@ -12,6 +8,8 @@ class YOLOv4Model:
         output = self.CSPDarknet53WithSPP()(input)
         self.model = tf.keras.Model(input, output)
 
+    def summary(self):
+        self.model.summary()
 
     def darknetConv(self, filters, size, strides=1, batch_norm=True, activation="mish"):
         def feed(x):
@@ -27,7 +25,7 @@ class YOLOv4Model:
                 strides=strides,
                 padding=padding,
                 use_bias=not batch_norm,
-                kernel_regularizer=tf.keras.regularizers.l2(0.0005)
+                kernel_regularizer=tf.keras.regularizers.l2(0.0005),
             )(x)
 
             if batch_norm:
@@ -71,11 +69,17 @@ class YOLOv4Model:
             x = self.darknetConv(512, 1, activation="leaky")(x)
 
             # SPP
-            spp1 = tf.keras.layers.MaxPooling2D(pool_size=13, strides=1, padding="same")(x) 
-            spp2 = tf.keras.layers.MaxPooling2D(pool_size=9, strides=1, padding="same")(x) 
-            spp3 = tf.keras.layers.MaxPooling2D(pool_size=5, strides=1, padding="same")(x)
+            spp1 = tf.keras.layers.MaxPooling2D(
+                pool_size=13, strides=1, padding="same"
+            )(x)
+            spp2 = tf.keras.layers.MaxPooling2D(pool_size=9, strides=1, padding="same")(
+                x
+            )
+            spp3 = tf.keras.layers.MaxPooling2D(pool_size=5, strides=1, padding="same")(
+                x
+            )
             x = tf.keras.layers.Concatenate()([spp1, spp2, spp3, x])
-            
+
             x = self.darknetConv(512, 1, activation="leaky")(x)
             x = self.darknetConv(1024, 3, activation="leaky")(x)
             x = self.darknetConv(512, 1, activation="leaky")(x)
