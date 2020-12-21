@@ -4,8 +4,8 @@ import tensorflow as tf
 class YOLOv4Model:
     def __init__(self, image_size):
         input = tf.keras.Input(shape=(image_size[0], image_size[1], 3))
-        x = self.CSPDarknet53WithSPP()(input)
-        self.model = tf.keras.Model(input, x)
+        output = self.CSPDarknet53WithSPP()(input)
+        self.model = tf.keras.Model(input, output)
 
     def Mish():
         def mish(x):
@@ -27,15 +27,15 @@ class YOLOv4Model:
                 strides=strides,
                 padding=padding,
                 use_bias=not batch_norm,
-                kernel_regularizer=tf.keras.regularizers.l2(0.0005),
+                kernel_regularizer=tf.keras.regularizers.l2(0.0005)
             )(x)
 
             if batch_norm:
                 x = tf.keras.layers.BatchNormalization()(x)
 
-            if activate_type == "mish":
-                x = tf.keras.layers.Mish()(x)
-            elif activate_type == "leaky":
+            if activation == "mish":
+                x = Mish()(x)
+            elif activation == "leaky":
                 x = tf.keras.layers.LeakyReLU(alpha=0.1)(x)
             return x
 
@@ -71,15 +71,11 @@ class YOLOv4Model:
             x = self.darknetConv(512, 1, activation="leaky")(x)
 
             # SPP
-            x = tf.concat(
-                [
-                    tf.nn.max_pool(x, ksize=13, padding="SAME", strides=1),
-                    tf.nn.max_pool(x, ksize=9, padding="SAME", strides=1),
-                    tf.nn.max_pool(x, ksize=5, padding="SAME", strides=1),
-                    x,
-                ],
-                axis=-1,
-            )
+            spp1 = tf.keras.layers.MaxPooling2D(pool_size=13, strides=1, padding="same")(x) 
+            spp2 = tf.keras.layers.MaxPooling2D(pool_size=9, strides=1, padding="same")(x) 
+            spp3 = tf.keras.layers.MaxPooling2D(pool_size=5, strides=1, padding="same")(x)
+            x = tf.layers.Concatenate()([spp1, spp2, spp3, x])
+            
             x = self.darknetConv(512, 1, activation="leaky")(x)
             x = self.darknetConv(1024, 3, activation="leaky")(x)
             x = self.darknetConv(512, 1, activation="leaky")(x)
