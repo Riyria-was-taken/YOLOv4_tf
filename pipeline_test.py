@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import os, sys
 
 from pipeline import YOLOv4Pipeline
+from img import draw_img
 
 dali_extra = os.environ['DALI_EXTRA_PATH']
 file_root = os.path.join(dali_extra, 'db', 'coco', 'images')
@@ -20,9 +21,10 @@ pipeline = YOLOv4Pipeline(
 )
 
 pipeline.build()
-images, bboxes = pipeline.run()
+images, bboxes, labels = pipeline.run()
 
-for i, image in enumerate(images):
-    plt.imshow(image)
-    plt.savefig('image' + str(i) + '.png')
-    plt.clf()
+#for i, image in enumerate(images):
+#    plt.imshow(image)
+#    plt.savefig('image' + str(i) + '.png')
+#    plt.clf()
+draw_img(images.at(0), bboxes.at(0), [], labels)
