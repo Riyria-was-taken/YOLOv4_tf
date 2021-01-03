@@ -3,15 +3,19 @@ from layers import Mish
 
 
 class YOLOv4Model:
-    def __init__(self, image_size):
+    def __init__(self, classes_num=80, image_size=(608, 608)):
+        self.classes_num = classes_num
         input = tf.keras.Input(shape=(image_size[0], image_size[1], 3))
         output = self.CSPDarknet53WithSPP()(input)
+        output = self.YOLOHead()(output)
         self.model = tf.keras.Model(input, output)
 
     def summary(self):
         self.model.summary()
 
-    def darknetConv(self, filters, size, strides=1, batch_norm=True, activation="mish"):
+    def darknetConv(
+        self, filters, size, strides=1, batch_norm=True, activate=True, activation="mish"
+    ):
         def feed(x):
             if strides == 1:
                 padding = "same"
@@ -31,10 +35,12 @@ class YOLOv4Model:
             if batch_norm:
                 x = tf.keras.layers.BatchNormalization()(x)
 
-            if activation == "mish":
-                x = Mish()(x)
-            elif activation == "leaky":
-                x = tf.keras.layers.LeakyReLU(alpha=0.1)(x)
+            if activate:
+                if activation == "mish":
+                    x = Mish()(x)
+                elif activation == "leaky":
+                    x = tf.keras.layers.LeakyReLU(alpha=0.1)(x)
+
             return x
 
         return feed
@@ -51,7 +57,7 @@ class YOLOv4Model:
                 x = self.darknetConv(filters2, 3)(x)
                 x = tf.keras.layers.Add()([skip, x])
             x = self.darknetConv(filters2, 1)(x)
-            x = tf.concat([x, route], axis=-1)
+            x = tf.keras.layers.Concatenate()([x, route])
             x = self.darknetConv(2 * filters, 1)(x)
             return x
 
@@ -62,8 +68,8 @@ class YOLOv4Model:
             x = self.darknetConv(32, 3)(x)
             x = self.darknetResidualBlock(32, initial=True)(x)
             x = self.darknetResidualBlock(64, repeats=2)(x)
-            x = r1 = self.darknetResidualBlock(128, repeats=8)(x)
-            x = r2 = self.darknetResidualBlock(256, repeats=8)(x)
+            x = route_1 = self.darknetResidualBlock(128, repeats=8)(x)
+            x = route_2 = self.darknetResidualBlock(256, repeats=8)(x)
             x = self.darknetResidualBlock(512, repeats=4)(x)
             x = self.darknetConv(512, 1, activation="leaky")(x)
             x = self.darknetConv(1024, 3, activation="leaky")(x)
@@ -79,16 +85,16 @@ class YOLOv4Model:
             x = self.darknetConv(512, 1, activation="leaky")(x)
             x = self.darknetConv(1024, 3, activation="leaky")(x)
             x = self.darknetConv(512, 1, activation="leaky")(x)
-            return r1, r2, x
+            return route_1, route_2, x
 
         return feed
 
-    def yoloConvBlock(self, filters):
-        def feed(x):
-            x = self.darknetConv(filters, 1)
+    def yoloUpsampleConvBlock(self, filters):
+        def feed(x, y):
+            x = self.darknetConv(filters, 1)(x)
             x = tf.keras.layers.UpSampling2D()(x)
-            route = self.darknetConv(filters, 1)
-            x = tf.keras.layers.Concatenate()([route, x])
+            y = self.darknetConv(filters, 1)(y)
+            x = tf.keras.layers.Concatenate()([y, x])
 
             x = self.darknetConv(filters, 1)(x)
             x = self.darknetConv(2 * filters, 3)(x)
@@ -96,13 +102,48 @@ class YOLOv4Model:
             x = self.darknetConv(2 * filters, 3)(x)
             x = self.darknetConv(filters, 1)(x)
 
-            return x, route
+            return x
 
         return feed
 
-    def YOLOHead(self, num_classes):
-        def feed(route_1, route_2, x):
-            x
+    def yoloDownsampleConvBlock(self, filters):
+        def feed(x, y):
+            x = self.darknetConv(filters, 3, strides=2)(x)
+            x = tf.keras.layers.Concatenate()([x, y])
+
+            x = self.darknetConv(filters, 1)(x)
+            x = self.darknetConv(2 * filters, 3)(x)
+            x = self.darknetConv(filters, 1)(x)
+            x = self.darknetConv(2 * filters, 3)(x)
+            x = self.darknetConv(filters, 1)(x)
+
+            return x
+
+        return feed
+
+    def yoloBboxConvBlock(self, filters):
+        def feed(x):
+            x = self.darknetConv(filters, 3)(x)
+            x = self.darknetConv(3 * (self.classes_num + 5), 1, activate=False, batch_norm=False)(x)
+
+            return x
+
+        return feed
+
+    def YOLOHead(self):
+        def feed(x):
+            route_1, route_2, route = x
+            x = route_2 = self.yoloUpsampleConvBlock(256)(route, route_2)
+            x = route_1 = self.yoloUpsampleConvBlock(128)(x, route_1)
+            small_bbox = self.yoloBboxConvBlock(256)(x)
+            x = self.yoloDownsampleConvBlock(256)(route_1, route_2)
+            medium_bbox = self.yoloBboxConvBlock(512)(x)
+            x = self.yoloDownsampleConvBlock(512)(x, route)
+            large_bbox = self.yoloBboxConvBlock(1024)(x)
+
+            return small_bbox, medium_bbox, large_bbox
+
+        return feed
 
     def __call__(self, input):
         return self.model.predict(input)
