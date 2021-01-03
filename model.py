@@ -69,15 +69,9 @@ class YOLOv4Model:
             x = self.darknetConv(512, 1, activation="leaky")(x)
 
             # SPP
-            spp1 = tf.keras.layers.MaxPooling2D(
-                pool_size=13, strides=1, padding="same"
-            )(x)
-            spp2 = tf.keras.layers.MaxPooling2D(pool_size=9, strides=1, padding="same")(
-                x
-            )
-            spp3 = tf.keras.layers.MaxPooling2D(pool_size=5, strides=1, padding="same")(
-                x
-            )
+            spp1 = tf.keras.layers.MaxPooling2D(pool_size=13, strides=1, padding="same")(x)
+            spp2 = tf.keras.layers.MaxPooling2D(pool_size=9, strides=1, padding="same")(x)
+            spp3 = tf.keras.layers.MaxPooling2D(pool_size=5, strides=1, padding="same")(x)
             x = tf.keras.layers.Concatenate()([spp1, spp2, spp3, x])
 
             x = self.darknetConv(512, 1, activation="leaky")(x)
