@@ -5,8 +5,8 @@ def read_img(path, size):
     img = tf.image.decode_image(open(path, 'rb').read(), channels=3)
     pixels = cv2.cvtColor(img.numpy(), cv2.COLOR_RGB2BGR)
     img = tf.image.resize(img, (size, size)) / 255
-    data = tf.data.Dataset.from_tensors(img)
-    return (pixels, data)
+    img = tf.reshape(img, (1, size, size, 3))
+    return (pixels, img)
 
 def draw_img(pixels, boxes, scores, classes):
     (h, w, _) = pixels.shape
