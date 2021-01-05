@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 from layers import Mish
 
 
@@ -12,6 +13,47 @@ class YOLOv4Model:
 
     def summary(self):
         self.model.summary()
+
+    def load_weights(self, weights_file):
+        with open(weights_file, 'rb') as f: 
+            major, minor, revision = np.fromfile(f, dtype=np.int32, count=3)
+            if (major * 10 + minor) >= 2:
+                seen = np.fromfile(f, dtype=np.int64, count=1)
+            else:
+                seen = np.fromfile(f, dtype=np.int32, count=1)
+            j = 0
+            for i in range(110):
+                conv_layer_name = 'conv2d_%d' %i if i > 0 else 'conv2d'
+                bn_layer_name = 'batch_normalization_%d' %j if j > 0 else 'batch_normalization'
+
+                conv_layer = self.model.get_layer(conv_layer_name)
+                in_dim = conv_layer.input_shape[-1]
+                filters = conv_layer.filters
+                size = conv_layer.kernel_size[0]
+
+                if i not in [93, 101, 109]:
+                    # darknet weights: [beta, gamma, mean, variance]
+                    bn_weights = np.fromfile(f, dtype=np.float32, count=4 * filters)
+                    # tf weights: [gamma, beta, mean, variance]
+                    bn_weights = bn_weights.reshape((4, filters))[[1, 0, 2, 3]]
+                    bn_layer = self.model.get_layer(bn_layer_name)
+                    j += 1
+                else:
+                    conv_bias = np.fromfile(f, dtype=np.float32, count=filters)
+
+                # darknet shape (out_dim, in_dim, height, width)
+                conv_shape = (filters, in_dim, size, size)
+                conv_weights = np.fromfile(f, dtype=np.float32, count=np.product(conv_shape))
+                # tf shape (height, width, in_dim, out_dim)
+                conv_weights = conv_weights.reshape(conv_shape).transpose([2, 3, 1, 0])
+
+                if i not in [93, 101, 109]:
+                    conv_layer.set_weights([conv_weights])
+                    bn_layer.set_weights(bn_weights)
+                else:
+                    conv_layer.set_weights([conv_weights, conv_bias])
+
+            assert len(f.read()) == 0, 'failed to read all data'
 
     def darknetConv(
         self, filters, size, strides=1, batch_norm=True, activate=True, activation="leaky"
