@@ -15,6 +15,11 @@ def draw_img(pixels, boxes, scores, classes):
         p1 = (int(x1 * w), int(y1 * h))
         p2 = (int(x2 * w), int(y2 * h))
         pixels = cv2.rectangle(pixels, p1, p2, (255, 0, 0), 2)
+        label = classes[i] + ": " + str(scores[i])
+        t_size = cv2.getTextSize(label, 0, 0.5, thickness=int(0.6 * (h + w) / 600) // 2)[0]
+        cv2.rectangle(pixels, p1, (p1[0] + t_size[0], p1[1] - t_size[1] - 3), (255, 0, 0), -1)
+        cv2.putText(pixels, label, (p1[0], p1[1] - 2), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, (255, 255, 255), int(0.6 * (h + w) / 600) // 2, lineType=cv2.LINE_AA)
     cv2.imshow('Image', pixels)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
