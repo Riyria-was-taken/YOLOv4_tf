@@ -27,4 +27,6 @@ images, bboxes, labels = pipeline.run()
 #    plt.imshow(image)
 #    plt.savefig('image' + str(i) + '.png')
 #    plt.clf()
-draw_img(images.at(0), bboxes.at(0), [], labels)
+labels = ['lol' for i in range(len(bboxes.at(0)))]
+scores = [1.0 for i in range(len(bboxes.at(0)))]
+draw_img(images.at(0), bboxes.at(0), scores, labels)
