@@ -15,7 +15,7 @@ class YOLOv4Model:
         self.model.summary()
 
     def load_weights(self, weights_file):
-        with open(weights_file, 'rb') as f: 
+        with open(weights_file, "rb") as f:
             major, minor, revision = np.fromfile(f, dtype=np.int32, count=3)
             if (major * 10 + minor) >= 2:
                 seen = np.fromfile(f, dtype=np.int64, count=1)
@@ -23,8 +23,8 @@ class YOLOv4Model:
                 seen = np.fromfile(f, dtype=np.int32, count=1)
             j = 0
             for i in range(110):
-                conv_layer_name = 'conv2d_%d' %i if i > 0 else 'conv2d'
-                bn_layer_name = 'batch_normalization_%d' %j if j > 0 else 'batch_normalization'
+                conv_layer_name = "conv2d_%d" % i if i > 0 else "conv2d"
+                bn_layer_name = "batch_normalization_%d" % j if j > 0 else "batch_normalization"
 
                 conv_layer = self.model.get_layer(conv_layer_name)
                 in_dim = conv_layer.input_shape[-1]
@@ -53,7 +53,7 @@ class YOLOv4Model:
                 else:
                     conv_layer.set_weights([conv_weights, conv_bias])
 
-            assert len(f.read()) == 0, 'failed to read all data'
+            assert len(f.read()) == 0, "failed to read all data"
 
     def darknetConv(
         self, filters, size, strides=1, batch_norm=True, activate=True, activation="leaky"

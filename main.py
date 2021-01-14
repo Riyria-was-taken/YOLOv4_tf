@@ -51,12 +51,8 @@ def run_infer(weights_file, labels_file, image_path):
 
                         stride_x = 1 / gw
                         stride_y = 1 / gh
-                        x = (
-                            sigmoid(dx) * scales[i] - 0.5 * (scales[i] - 1) + ix
-                        ) * stride_x
-                        y = (
-                            sigmoid(dy) * scales[i] - 0.5 * (scales[i] - 1) + iy
-                        ) * stride_y
+                        x = (sigmoid(dx) * scales[i] - 0.5 * (scales[i] - 1) + ix) * stride_x
+                        y = (sigmoid(dy) * scales[i] - 0.5 * (scales[i] - 1) + iy) * stride_y
 
                         w, h = anchor_sizes[i][ir]
                         w /= 608
@@ -65,9 +61,7 @@ def run_infer(weights_file, labels_file, image_path):
                         h *= math.exp(dh)
 
                         l, t, r, b = x - 0.5 * w, y - 0.5 * h, x + 0.5 * w, y + 0.5 * h
-                        pred_boxes[cls].append(
-                            (confidence[cls] * objectness, [l, t, r, b])
-                        )
+                        pred_boxes[cls].append((confidence[cls] * objectness, [l, t, r, b]))
 
     # nms
     def iou(box1, box2):
@@ -76,9 +70,7 @@ def run_infer(weights_file, labels_file, image_path):
         r = min(box1[2], box2[2])
         b = min(box1[3], box2[3])
         i = max(0, (r - l) * (b - t))
-        u = (box1[2] - box1[0]) * (box1[3] - box1[1]) + (box2[2] - box2[0]) * (
-            box2[3] - box2[1]
-        )
+        u = (box1[2] - box1[0]) * (box1[3] - box1[1]) + (box2[2] - box2[0]) * (box2[3] - box2[1])
         return i / u
 
     boxes = []
