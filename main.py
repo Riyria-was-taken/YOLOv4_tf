@@ -43,7 +43,7 @@ def run_infer(weights_file, labels_file, image_path, out_filename):
                     confidence = [sigmoid(x) for x in data[5:]]
                     cls = np.argmax(confidence)
                     objectness = confidence[cls] * sigmoid(data[4])
-
+                    
                     if objectness > 0.25:
                         stride_x = 1 / gw
                         stride_y = 1 / gh
@@ -65,7 +65,7 @@ def run_infer(weights_file, labels_file, image_path, out_filename):
         t = max(box1[1], box2[1])
         r = min(box1[2], box2[2])
         b = min(box1[3], box2[3])
-        i = max(0, (r - l) * (b - t))
+        i = max(0, r - l) * max(0, b - t)
         u = (box1[2] - box1[0]) * (box1[3] - box1[1]) + (box2[2] - box2[0]) * (box2[3] - box2[1]) - i
         return i / u
 

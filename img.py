@@ -17,7 +17,7 @@ def add_bboxes(pixels, boxes, scores, classes):
         p1 = (int(x1 * w), int(y1 * h))
         p2 = (int(x2 * w), int(y2 * h))
         pixels = cv2.rectangle(pixels, p1, p2, (255, 0, 0), 2)
-        label = classes[i] + ": " + str(scores[i])
+        label = classes[i] + ": " + str(round(scores[i], 2))
         t_size = cv2.getTextSize(label, 0, 0.5, thickness=int(0.6 * (h + w) / 600) // 2)[0]
         cv2.rectangle(pixels, p1, (p1[0] + t_size[0], p1[1] - t_size[1] - 3), (255, 0, 0), -1)
         cv2.putText(
