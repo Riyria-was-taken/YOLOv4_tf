@@ -10,7 +10,7 @@ def read_img(path, size):
     return (pixels, img)
 
 
-def draw_img(pixels, boxes, scores, classes):
+def add_bboxes(pixels, boxes, scores, classes):
     (h, w, _) = pixels.shape
     for i in range(len(boxes)):
         (x1, y1, x2, y2) = boxes[i]
@@ -30,15 +30,14 @@ def draw_img(pixels, boxes, scores, classes):
             int(0.6 * (h + w) / 600) // 2,
             lineType=cv2.LINE_AA,
         )
+    return pixels
+
+
+def draw_img(pixels):
     cv2.imshow("Image", pixels)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
 
-"""
-(pix, _) = read_img('birb.jpg', 300)
-boxes = [[0.14, 0.27, 0.61, 1.00]]
-scores = [0.69]
-classes = [14.0]
-draw_img(pix, boxes, scores, classes)
-"""
+def save_img(filename, pixels):
+    cv2.imwrite(filename, pixels)

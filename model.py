@@ -1,11 +1,12 @@
 import tensorflow as tf
 import numpy as np
-from layers import Mish
+from layers import Mish, ScaledRandomUniform
 
 
 class YOLOv4Model:
     def __init__(self, classes_num=80, image_size=(608, 608)):
         self.classes_num = classes_num
+        self.image_size = (image_size[0], image_size[1], 3)
         input = tf.keras.Input(shape=(image_size[0], image_size[1], 3))
         output = self.CSPDarknet53WithSPP()(input)
         output = self.YOLOHead()(output)
@@ -71,11 +72,14 @@ class YOLOv4Model:
                 strides=strides,
                 padding=padding,
                 use_bias=not batch_norm,
+                kernel_initializer=ScaledRandomUniform(
+                    scale=tf.sqrt(2 / (size * size * self.image_size[2])), minval=-1, maxval=1
+                ),
                 kernel_regularizer=tf.keras.regularizers.l2(0.0005),
             )(x)
 
             if batch_norm:
-                x = tf.keras.layers.BatchNormalization()(x)
+                x = tf.keras.layers.BatchNormalization(moving_variance_initializer="zeros")(x)
 
             if activate:
                 if activation == "mish":

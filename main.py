@@ -1,7 +1,7 @@
 from model import YOLOv4Model
 import numpy as np
 
-from img import read_img, draw_img
+from img import read_img, draw_img, save_img, add_bboxes
 
 import math
 import sys
@@ -9,9 +9,6 @@ import sys
 
 def sigmoid(x):
     return 1 / (1 + math.exp(-x))
-
-
-# input = np.random.random([1, 608, 608, 3])
 
 
 anchor_sizes = [
@@ -22,7 +19,7 @@ anchor_sizes = [
 scales = [1.2, 1.1, 1.05]
 
 
-def run_infer(weights_file, labels_file, image_path):
+def run_infer(weights_file, labels_file, image_path, out_filename):
 
     model = YOLOv4Model()
     model.load_weights(weights_file)
@@ -34,21 +31,20 @@ def run_infer(weights_file, labels_file, image_path):
     pred_boxes = [[] for i in range(len(cls_names))]
     for i, preds in enumerate(model(input)):
         s = preds.shape
+        print(s)
         gw, gh = s[1:3]
         d = s[3]
         for ix in range(gw):
             for iy in range(gh):
                 for ir in range(3):
-
                     data = preds[0, iy, ix, (d // 3) * ir : (d // 3) * (ir + 1)]
 
                     dx, dy, dw, dh = data[:4]
-                    objectness = data[4]
-                    confidence = data[5:]
+                    confidence = [sigmoid(x) for x in data[5:]]
+                    cls = np.argmax(confidence)
+                    objectness = confidence[cls] * sigmoid(data[4])
 
-                    if objectness > 0:
-                        cls = np.argmax(confidence)
-
+                    if objectness > 0.25:
                         stride_x = 1 / gw
                         stride_y = 1 / gh
                         x = (sigmoid(dx) * scales[i] - 0.5 * (scales[i] - 1) + ix) * stride_x
@@ -90,7 +86,11 @@ def run_infer(weights_file, labels_file, image_path):
             cls_preds = rem
 
     print(scores)
-    draw_img(img, boxes, scores, labels)
+    pixels = add_bboxes(img, boxes, scores, labels)
+    if out_filename:
+        save_img(out_filename, pixels)
+    else:
+        draw_img(pixels)
 
 
 if __name__ == "__main__":
@@ -102,6 +102,7 @@ if __name__ == "__main__":
     infer = subparsers.add_parser("infer")
     infer.add_argument("--weights", "-w", nargs="?", default="yolov4.weights")
     infer.add_argument("--classes", "-c", nargs="?", default="coco-labels.txt")
+    infer.add_argument("--output", "-o")
     infer.add_argument("image")  # , nargs="+")
     subparsers.add_parser("train")
     subparsers.add_parser("verify")
@@ -109,6 +110,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.action == "infer":
-        run_infer(args.weights, args.classes, args.image)
+        run_infer(args.weights, args.classes, args.image, args.output)
     else:
         print("The " + args.action + " action is not yet implemented :<")
