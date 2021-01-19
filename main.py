@@ -66,7 +66,7 @@ def run_infer(weights_file, labels_file, image_path, out_filename):
         r = min(box1[2], box2[2])
         b = min(box1[3], box2[3])
         i = max(0, (r - l) * (b - t))
-        u = (box1[2] - box1[0]) * (box1[3] - box1[1]) + (box2[2] - box2[0]) * (box2[3] - box2[1])
+        u = (box1[2] - box1[0]) * (box1[3] - box1[1]) + (box2[2] - box2[0]) * (box2[3] - box2[1]) - i
         return i / u
 
     boxes = []
