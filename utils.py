@@ -2,6 +2,10 @@ import numpy as np
 import tensorflow as tf
 import numpy as np
 
+
+def sigmoid(x):
+    return 1 / (1 + tf.math.exp(-x))
+
 def xywh_to_ltrb(boxes):
     boxes = tf.convert_to_tensor(boxes)
     x = boxes[..., 0]
