@@ -46,8 +46,8 @@ def calc_gious(boxes1, boxes2):
 
     cl = tf.math.minimum(ltrb1[..., 0], ltrb2[..., 0])
     ct = tf.math.minimum(ltrb1[..., 1], ltrb2[..., 1])
-    cr = tf.math.minimum(ltrb1[..., 2], ltrb2[..., 2])
-    cb = tf.math.minimum(ltrb1[..., 3], ltrb2[..., 3])
+    cr = tf.math.maximum(ltrb1[..., 2], ltrb2[..., 2])
+    cb = tf.math.maximum(ltrb1[..., 3], ltrb2[..., 3])
     C = (cr - cl) * (cb - ct)
 
     return I / U - (C - U) / C
