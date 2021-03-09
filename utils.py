@@ -3,6 +3,15 @@ import tensorflow as tf
 import numpy as np
 
 
+ANCHORS = [
+    [(12, 16), (19, 36), (40, 28)],
+    [(36, 75), (76, 55), (72, 146)],
+    [(142, 110), (192, 243), (459, 401)],
+]
+SCALES = [1.2, 1.1, 1.05]
+SIZE = 608
+
+
 def sigmoid(x):
     return 1 / (1 + tf.math.exp(-x))
 
@@ -22,7 +31,7 @@ def calc_ious(boxes1, boxes2):
     it = tf.math.maximum(ltrb1[..., 1], ltrb2[..., 1])
     ir = tf.math.minimum(ltrb1[..., 2], ltrb2[..., 2])
     ib = tf.math.minimum(ltrb1[..., 3], ltrb2[..., 3])
-    I = tf.math.maximum(0, ir - il) * tf.math.maximum(0, ib - it)
+    I = tf.math.maximum(0.0, ir - il) * tf.math.maximum(0.0, ib - it)
 
     A1 = (ltrb1[..., 2] - ltrb1[..., 0]) * (ltrb1[..., 3] - ltrb1[..., 1])
     A2 = (ltrb2[..., 2] - ltrb2[..., 0]) * (ltrb2[..., 3] - ltrb2[..., 1])
@@ -38,7 +47,7 @@ def calc_gious(boxes1, boxes2):
     it = tf.math.maximum(ltrb1[..., 1], ltrb2[..., 1])
     ir = tf.math.minimum(ltrb1[..., 2], ltrb2[..., 2])
     ib = tf.math.minimum(ltrb1[..., 3], ltrb2[..., 3])
-    I = tf.math.maximum(0, ir - il) * tf.math.maximum(0, ib - it)
+    I = tf.math.maximum(0.0, ir - il) * tf.math.maximum(0.0, ib - it)
 
     A1 = (ltrb1[..., 2] - ltrb1[..., 0]) * (ltrb1[..., 3] - ltrb1[..., 1])
     A2 = (ltrb2[..., 2] - ltrb2[..., 0]) * (ltrb2[..., 3] - ltrb2[..., 1])
@@ -51,3 +60,34 @@ def calc_gious(boxes1, boxes2):
     C = (cr - cl) * (cb - ct)
 
     return I / U - (C - U) / C
+
+def decode_preds(preds):
+    output = []
+    for i, layer in enumerate(preds):
+        shape = layer.shape # [batch, width, height, 3 * (5 + classes)]
+        d = shape[3]
+        gw, gh = shape[1 : 3]
+        stride_x = 1 / gw
+        stride_y = 1 / gh
+        tile_x = tf.cast(tf.tile(tf.expand_dims(tf.range(gw), axis=0), [gw, 1]), tf.float32)
+        tile_y = tf.cast(tf.tile(tf.expand_dims(tf.range(gw), axis=1), [1, gh]), tf.float32)
+        output_layer = []
+        for ir in range(3):
+            data = layer[..., (d // 3) * ir : (d // 3) * (ir + 1)]
+            dx = data[..., 0]
+            dy = data[..., 1]
+            dw = data[..., 2]
+            dh = data[..., 3]
+            x = (sigmoid(dx) * SCALES[i] - 0.5 * (SCALES[i] - 1) + tile_x) * stride_x
+            y = (sigmoid(dy) * SCALES[i] - 0.5 * (SCALES[i] - 1) + tile_y) * stride_y
+            w = tf.math.exp(dw) * ANCHORS[i][ir][0] / SIZE
+            h = tf.math.exp(dh) * ANCHORS[i][ir][1] / SIZE
+            xywh = tf.stack([x, y, w, h], axis=-1)
+
+            obj = tf.expand_dims(sigmoid(data[..., 4]), axis=-1)
+            probs = sigmoid(data[..., 5 : ])
+
+            output_layer.append(tf.concat([xywh, obj, probs], axis=-1))
+        output.append(tf.concat(output_layer, axis=-1))
+
+    return tuple(output)

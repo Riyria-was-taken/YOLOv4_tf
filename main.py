@@ -1,22 +1,11 @@
 from model import YOLOv4Model
+from utils import decode_preds
 import numpy as np
 
 from img import read_img, draw_img, save_img, add_bboxes
 
 import math
 import sys
-
-
-def sigmoid(x):
-    return 1 / (1 + math.exp(-x))
-
-
-anchor_sizes = [
-    [(12, 16), (19, 36), (40, 28)],
-    [(36, 75), (76, 55), (72, 146)],
-    [(142, 110), (192, 243), (459, 401)],
-]
-scales = [1.2, 1.1, 1.05]
 
 
 def run_infer(weights_file, labels_file, image_path, out_filename):
@@ -29,9 +18,9 @@ def run_infer(weights_file, labels_file, image_path, out_filename):
     cls_names = open(labels_file, "r").read().split("\n")
 
     pred_boxes = [[] for i in range(len(cls_names))]
-    for i, preds in enumerate(model(input)):
+    output = decode_preds(model(input))
+    for i, preds in enumerate(output):
         s = preds.shape
-        print(s)
         gw, gh = s[1:3]
         d = s[3]
         for ix in range(gw):
@@ -39,25 +28,14 @@ def run_infer(weights_file, labels_file, image_path, out_filename):
                 for ir in range(3):
                     data = preds[0, iy, ix, (d // 3) * ir : (d // 3) * (ir + 1)]
 
-                    dx, dy, dw, dh = data[:4]
-                    confidence = [sigmoid(x) for x in data[5:]]
+                    x, y, w, h = data[ : 4]
+                    confidence = data[5 : ]
                     cls = np.argmax(confidence)
-                    objectness = confidence[cls] * sigmoid(data[4])
-                    
+                    objectness = confidence[cls] * data[4]
+
                     if objectness > 0.25:
-                        stride_x = 1 / gw
-                        stride_y = 1 / gh
-                        x = (sigmoid(dx) * scales[i] - 0.5 * (scales[i] - 1) + ix) * stride_x
-                        y = (sigmoid(dy) * scales[i] - 0.5 * (scales[i] - 1) + iy) * stride_y
-
-                        w, h = anchor_sizes[i][ir]
-                        w /= 608
-                        h /= 608
-                        w *= math.exp(dw)
-                        h *= math.exp(dh)
-
                         l, t, r, b = x - 0.5 * w, y - 0.5 * h, x + 0.5 * w, y + 0.5 * h
-                        pred_boxes[cls].append((confidence[cls] * objectness, [l, t, r, b]))
+                        pred_boxes[cls].append((objectness.numpy(), [l, t, r, b]))
 
     # nms
     def iou(box1, box2):
@@ -85,7 +63,6 @@ def run_infer(weights_file, labels_file, image_path, out_filename):
                     rem.append((score2, box2))
             cls_preds = rem
 
-    print(scores)
     pixels = add_bboxes(img, boxes, scores, labels)
     if out_filename:
         save_img(out_filename, pixels)
