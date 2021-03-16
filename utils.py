@@ -69,7 +69,9 @@ def decode_layer(layer, layer_id):
     stride_y = 1 / gh
     tile_x = tf.cast(tf.tile(tf.expand_dims(tf.range(gw), axis=0), [gw, 1]), tf.float32)
     tile_y = tf.cast(tf.tile(tf.expand_dims(tf.range(gw), axis=1), [1, gh]), tf.float32)
-    output_layer = []
+    output_xywh = []
+    output_obj = []
+    output_cls = []
     for ir in range(3):
         data = layer[..., (d // 3) * ir : (d // 3) * (ir + 1)]
         dx = data[..., 0]
@@ -80,10 +82,11 @@ def decode_layer(layer, layer_id):
         y = (sigmoid(dy) * SCALES[layer_id] - 0.5 * (SCALES[layer_id] - 1) + tile_y) * stride_y
         w = tf.math.exp(dw) * ANCHORS[layer_id][ir][0] / SIZE
         h = tf.math.exp(dh) * ANCHORS[layer_id][ir][1] / SIZE
-        xywh = tf.stack([x, y, w, h], axis=-1)
+        output_xywh.append(tf.stack([x, y, w, h], axis=-1))
 
-        obj = tf.expand_dims(sigmoid(data[..., 4]), axis=-1)
-        probs = sigmoid(data[..., 5 : ])
+        output_obj.append(sigmoid(data[..., 4]))
+        output_cls.append(sigmoid(data[..., 5 : ]))
 
-        output_layer.append(tf.concat([xywh, obj, probs], axis=-1))
-    return tf.concat(output_layer, axis=-1)
+    return (tf.stack(output_xywh, axis=-2),
+            tf.stack(output_obj, axis=-1),
+            tf.stack(output_cls, axis=-2))

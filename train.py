@@ -8,74 +8,69 @@ import math
 
 import utils
 
+BATCH_SIZE = 1
+
 
 def calc_loss(layer_id, gt, preds):
     gt_boxes = gt[..., : 4]
     gt_labels = tf.cast(gt[..., 4], tf.int32)
-    layer = utils.decode_layer(preds, layer_id)
+    layer_xywh, layer_obj, layer_cls = utils.decode_layer(preds, layer_id)
+    cls_count = layer_cls.shape[-1]
 
-    s = layer.shape
-    gw, gh = s[1:3]
+    s = tf.shape(preds) # (batch, x, y, ratio * stuff)
+    gw = s[1]
+    gh = s[2]
     stride_x = 1 / gw
     stride_y = 1 / gh
     d = s[3]
-    truth_mask = tf.zeros([1, gw, gh, 3])
+    truth_mask = tf.zeros((BATCH_SIZE, gw, gh, 3))
 
     box_loss = 0.0
     cls_loss = 0.0
-    for i in range(gt_labels.shape[-1]):
-        gt_box = gt_boxes[0, i]
-        gt_cls = gt_labels[0, i]
 
-        ix = tf.cast(tf.math.floor(gw * gt_box[0]), tf.int32)
-        iy = tf.cast(tf.math.floor(gh * gt_box[1]), tf.int32)
-        best_ar_iou = 0.0
-        best_ar = 0
-        gt_shift = (0, 0, gt_box[2], gt_box[3])
+    ix = tf.cast(tf.math.floor(tf.cast(gw, tf.float32) * gt_boxes[..., 0]), tf.int32)
+    iy = tf.cast(tf.math.floor(tf.cast(gh, tf.float32) * gt_boxes[..., 1]), tf.int32)
 
-        good = []
-        for ir in range(3):
-            w, h = anchor_sizes[i][ir]
-            w /= 608
-            h /= 608
-            iou = utils.calc_ious(gt_shift, (0, 0, w, h))
-            if iou > best_ar_iou:
-                best_ar_iou = iou
-                best_ar = ir
-            if iou > 0.213:
-                good.append(ir)
-        if len(good) == 0:
-            good.append(best_ar)
+    box_shape = tf.shape(gt_labels)
+    zeros = tf.zeros_like(gt_labels, dtype=tf.float32)
+    gt_shift = tf.stack([zeros, zeros, gt_boxes[..., 2], gt_boxes[..., 3]], axis=-1)
+    gt_shift = tf.stack([gt_shift, gt_shift, gt_shift], axis=1)
 
-        for ir in good:
-            truth_mask = tf.tensor_scatter_nd_update(truth_mask, [(0, iy, ix, ir)], [1])
+    anchors_ws = [tf.cast(tf.fill(box_shape, anchor_sizes[layer_id][ir][0]), dtype=tf.float32) / 608.0 for ir in range(3)]
+    anchors_hs = [tf.cast(tf.fill(box_shape, anchor_sizes[layer_id][ir][1]), dtype=tf.float32) / 608.0 for ir in range(3)]
+    anchors = tf.stack([tf.stack([zeros, zeros, anchors_ws[ir], anchors_hs[ir]], axis=-1) for ir in range(3)], axis=1)
 
-            data = layer[0, iy, ix, (d // 3) * ir : (d // 3) * (ir + 1)]
-            pred_box = data[ : 4]
-            cls_preds = data[5 : ]
+    ious = utils.calc_ious(gt_shift, anchors)
+    ious_argmax = tf.cast(tf.argmax(ious, axis=1), dtype=tf.int32)
+    batch_idx = tf.tile(tf.range(BATCH_SIZE)[ : , tf.newaxis], [1, box_shape[-1]])
 
-            box_loss += 1 - utils.calc_gious(gt_box[:4], pred_box)
-            for ic in range(len(cls_preds)):
-                pred = cls_preds[ic]
-                truth = 1.0 if gt_cls == ic else 0.0
-                cls_loss += (pred - truth)**2
+    indices = tf.reshape(tf.stack([batch_idx, iy, ix, ious_argmax], axis=-1), [-1, 4])
+    pred_boxes = tf.gather_nd(layer_xywh, indices)
+    box_loss = tf.math.reduce_sum(1.0 - utils.calc_gious(pred_boxes, gt_boxes))
 
-    inv_truth_mask = 1 - truth_mask
-    obj_loss = 0.0
-    for ir in range(3):
-        data = layer[..., (d // 3) * ir : (d // 3) * (ir + 1)]
-        pred_boxes = data[0, ..., : 4]
-        objectness = data[0, ..., 4]
+    cls_one_hot = tf.one_hot(gt_labels, cls_count)
+    pred_cls = tf.gather_nd(layer_cls, indices)
+    cls_loss = tf.math.reduce_sum(tf.math.square(pred_cls - cls_one_hot))
 
-        best_ious = tf.zeros([1, gw, gh])
-        for gt_box in gt_boxes[0]:
-            gt_box_exp = tf.tile(tf.reshape(gt_box, (1, 1, 1, 4)), [1, gw, gh, 1])
-            ious = utils.calc_ious(pred_boxes, gt_box_exp)
-            best_ious = tf.math.maximum(best_ious, ious)
-        iou_mask = tf.cast(best_ious < 0.7, tf.float32)
+    truth_mask = tf.tensor_scatter_nd_update(truth_mask, indices, tf.ones(indices.shape[0]))
 
-        obj_loss += tf.math.reduce_sum(tf.math.square(1 - objectness) * truth_mask[..., ir])
-        obj_loss += tf.math.reduce_sum(tf.math.square(objectness) * inv_truth_mask[..., ir] * iou_mask)
+    # TODO: add iou masking for noobj loss
+    obj_loss = tf.math.reduce_sum(tf.math.square(truth_mask - layer_obj))
+
+#    for ir in range(3):
+#        data = layer[..., (d // 3) * ir : (d // 3) * (ir + 1)]
+#        pred_boxes = data[0, ..., : 4]
+#        objectness = data[0, ..., 4]
+#
+#        best_ious = tf.zeros([1, gw, gh])
+#        for gt_box in gt_boxes[0]:
+#            gt_box_exp = tf.tile(tf.reshape(gt_box, (1, 1, 1, 4)), [1, gw, gh, 1])
+#            ious = utils.calc_ious(pred_boxes, gt_box_exp)
+#            best_ious = tf.math.maximum(best_ious, ious)
+#        iou_mask = tf.cast(best_ious < 0.7, tf.float32)
+#
+#        obj_loss += tf.math.reduce_sum(tf.math.square(1 - objectness) * truth_mask[..., ir])
+#        obj_loss += tf.math.reduce_sum(tf.math.square(objectness) * inv_truth_mask[..., ir] * iou_mask)
 
     return box_loss, obj_loss, cls_loss
 
@@ -83,7 +78,7 @@ def calc_loss(layer_id, gt, preds):
 
 img, input = read_img("test_img/doggos.jpg", 608)
 gt_boxes = tf.convert_to_tensor([[[0.7155, 0.539, 0.385, 0.572, 16],
-                                 [0.363, 0.557, 0.452, 0.606, 16]]])
+                                  [0.363, 0.557, 0.452, 0.606, 16]]])
 gt_labels = tf.convert_to_tensor([[16, 16]])
 gt_count = 2
 
@@ -97,6 +92,8 @@ scales = [1.2, 1.1, 1.05]
 # input = np.random.random([1, 608, 608, 3])
 model = YOLOv4Model()
 model.load_weights("yolov4.weights")
+print(calc_loss(0, gt_boxes, model(input)[0]))
+
 
 model.model.compile(
     optimizer=tf.keras.optimizers.Adam(),
