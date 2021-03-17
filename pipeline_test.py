@@ -19,7 +19,8 @@ pipeline = YOLOv4Pipeline(
 )
 
 pipeline.build()
-images, bboxes, labels = pipeline.run()
+images, bboxes = pipeline.run()
+print(bboxes.at(0))
 
 # for i, image in enumerate(images):
 #    plt.imshow(image)
@@ -27,4 +28,4 @@ images, bboxes, labels = pipeline.run()
 #    plt.clf()
 labels = ["lol" for i in range(len(bboxes.at(0)))]
 scores = [1.0 for i in range(len(bboxes.at(0)))]
-draw_img(images.at(0), bboxes.at(0), scores, labels)
+draw_img(images.at(0))

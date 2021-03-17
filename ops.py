@@ -34,7 +34,7 @@ def generate_tiles(images, bboxes, labels, shape_x, shape_y, image_size):
         bbox_layout="xyXY",
         allow_no_crop=False,
     )
-    images = dali.fn.slice(images, crop_anchor, crop_shape)
+    images = dali.fn.slice(images, crop_anchor, crop_shape, normalized_anchor=False, normalized_shape=False)
     return images, bboxes, labels
 
 

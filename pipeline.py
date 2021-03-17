@@ -1,4 +1,6 @@
 import nvidia.dali as dali
+import nvidia.dali.plugin.tf as dali_tf
+import tensorflow as tf
 import ops
 
 
@@ -31,7 +33,24 @@ class YOLOv4Pipeline:
 
             images, bboxes, labels = ops.mosaic(images, bboxes, labels, self._image_size)
 
-            self._pipe.set_outputs(images, bboxes, labels)
+            images = dali.fn.cast(images, dtype=dali.types.FLOAT) / 255.0
+            labels = dali.fn.cast(
+                dali.fn.transpose(dali.fn.stack(labels), perm=[1, 0]),
+                dtype=dali.types.FLOAT
+            )
+
+            self._pipe.set_outputs(images, dali.fn.cat(bboxes, labels, axis=1))
+
+    def dataset(self):
+        output_shapes = ((self._batch_size, self._image_size[0], self._image_size[0], 3), (self._batch_size, None, 5))
+        output_dtypes = (tf.float32, tf.float32)
+        return dali_tf.DALIDataset(
+            pipeline=self._pipe,
+            batch_size=self._batch_size,
+            output_shapes=output_shapes,
+            output_dtypes=output_dtypes,
+            device_id=0
+        )
 
     def build(self):
         self._pipe.build()

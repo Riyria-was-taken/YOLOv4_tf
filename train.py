@@ -3,10 +3,12 @@ import numpy as np
 import tensorflow as tf
 
 from img import read_img, draw_img
+from pipeline import YOLOv4Pipeline
+import utils
 
 import math
+import os
 
-import utils
 
 BATCH_SIZE = 1
 
@@ -52,7 +54,7 @@ def calc_loss(layer_id, gt, preds):
     pred_cls = tf.gather_nd(layer_cls, indices)
     cls_loss = tf.math.reduce_sum(tf.math.square(pred_cls - cls_one_hot))
 
-    truth_mask = tf.tensor_scatter_nd_update(truth_mask, indices, tf.ones(indices.shape[0]))
+    truth_mask = tf.tensor_scatter_nd_update(truth_mask, indices, tf.ones(tf.shape(indices)[0]))
 
     # TODO: add iou masking for noobj loss
     obj_loss = tf.math.reduce_sum(tf.math.square(truth_mask - layer_obj))
@@ -92,14 +94,29 @@ scales = [1.2, 1.1, 1.05]
 # input = np.random.random([1, 608, 608, 3])
 model = YOLOv4Model()
 model.load_weights("yolov4.weights")
-print(calc_loss(0, gt_boxes, model(input)[0]))
+
+
+
+dali_extra = os.environ["DALI_EXTRA_PATH"]
+file_root = os.path.join(dali_extra, "db", "coco", "images")
+annotations_file = os.path.join(dali_extra, "db", "coco", "instances.json")
+
+batch_size = 1
+image_size = (608, 608)
+num_threads = 1
+device_id = 0
+seed = int.from_bytes(os.urandom(4), "little")
+
+pipeline = YOLOv4Pipeline(
+    file_root, annotations_file, batch_size, image_size, num_threads, device_id, seed
+)
 
 
 model.model.compile(
     optimizer=tf.keras.optimizers.Adam(),
     loss=tuple([lambda x, y : calc_loss(i, x, y) for i in range(3)])
 )
-model.model.fit(input, gt_boxes)
+model.model.fit(pipeline.dataset(), epochs=5, steps_per_epoch=10)
 
 #output = model(input)
 #print(calc_loss(gt_boxes, [16, 16], output))
