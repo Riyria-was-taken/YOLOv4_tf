@@ -13,7 +13,7 @@ import os
 BATCH_SIZE = 1
 
 
-def calc_loss(layer_id, gt, preds):
+def calc_loss(layer_id, gt, preds, debug=False):
     gt_boxes = gt[..., : 4]
     gt_labels = tf.cast(gt[..., 4], tf.int32)
     layer_xywh, layer_obj, layer_cls = utils.decode_layer(preds, layer_id)
@@ -74,7 +74,7 @@ def calc_loss(layer_id, gt, preds):
 #        obj_loss += tf.math.reduce_sum(tf.math.square(1 - objectness) * truth_mask[..., ir])
 #        obj_loss += tf.math.reduce_sum(tf.math.square(objectness) * inv_truth_mask[..., ir] * iou_mask)
 
-    return box_loss, obj_loss, cls_loss
+    return box_loss + obj_loss + cls_loss
 
 
 
@@ -91,10 +91,8 @@ anchor_sizes = [
 ]
 scales = [1.2, 1.1, 1.05]
 
-# input = np.random.random([1, 608, 608, 3])
 model = YOLOv4Model()
-model.load_weights("yolov4.weights")
-
+#model.load_weights("yolov4.weights")
 
 
 dali_extra = os.environ["DALI_EXTRA_PATH"]
@@ -110,13 +108,62 @@ seed = int.from_bytes(os.urandom(4), "little")
 pipeline = YOLOv4Pipeline(
     file_root, annotations_file, batch_size, image_size, num_threads, device_id, seed
 )
+dataset = pipeline.dataset()
 
 
+var_list = model.model.trainable_weights
+iterator = iter(dataset)
+
+def loss():
+    input, gt_boxes = iterator.get_next()
+    output = model(input)
+    loss0 = calc_loss(0, gt_boxes, output[0])
+    loss1 = calc_loss(1, gt_boxes, output[1])
+    loss2 = calc_loss(2, gt_boxes, output[2])
+    return loss0 + loss1 + loss2
+
+
+# needs verification
+optimizer=tf.keras.optimizers.Adam()
+global_steps = tf.Variable(1, trainable=False, dtype=tf.int64)
+total_steps = 1000
+warmup_steps = int(0.3 * total_steps)
+LR_INIT = 1e-3
+LR_END = 1e-6
+for i in range(total_steps):
+    with tf.GradientTape() as tape:
+
+        total_loss = loss()
+        gradients = tape.gradient(total_loss, model.model.trainable_variables)
+        optimizer.apply_gradients(zip(gradients, model.model.trainable_variables))
+
+        tf.print("=> TEST STEP %4d   lr: %.6f   loss: %4.2f" % (global_steps, optimizer.lr.numpy(), total_loss))
+
+        global_steps.assign_add(1)
+        if global_steps < warmup_steps:
+            lr = global_steps / warmup_steps * LR_INIT
+        else:
+            lr = LR_END + 0.5 * (LR_INIT - LR_END) * (
+                (1 + tf.cos((global_steps - warmup_steps) / (total_steps - warmup_steps) * np.pi))
+            )
+        optimizer.lr.assign(lr.numpy())
+
+output = model.predict(input)
+print(output)
+print(calc_loss(0, gt_boxes, output[0]))
+print(calc_loss(1, gt_boxes, output[1]))
+print(calc_loss(2, gt_boxes, output[2]))
+quit()
+
+
+
+
+
+'''
 model.model.compile(
     optimizer=tf.keras.optimizers.Adam(),
-    loss=tuple([lambda x, y : calc_loss(i, x, y) for i in range(3)])
+    loss=tuple([lambda x, y : calc_loss(i, x, y) for i in range(3)]),
+    loss_weights=[1.0, 1.0, 1.0]
 )
 model.model.fit(pipeline.dataset(), epochs=5, steps_per_epoch=10)
-
-#output = model(input)
-#print(calc_loss(gt_boxes, [16, 16], output))
+'''

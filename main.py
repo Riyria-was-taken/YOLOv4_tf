@@ -18,7 +18,7 @@ def run_infer(weights_file, labels_file, image_path, out_filename):
     cls_names = open(labels_file, "r").read().split("\n")
 
     pred_boxes = [[] for i in range(len(cls_names))]
-    output = [decode_layer(layer, i) for i, layer in enumerate(model(input))]
+    output = [decode_layer(layer, i) for i, layer in enumerate(model.predict(input))]
     for i, preds in enumerate(output):
         s = preds.shape
         gw, gh = s[1:3]

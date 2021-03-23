@@ -56,6 +56,7 @@ class YOLOv4Model:
 
             assert len(f.read()) == 0, "failed to read all data"
 
+
     def darknetConv(
         self, filters, size, strides=1, batch_norm=True, activate=True, activation="leaky"
     ):
@@ -73,13 +74,13 @@ class YOLOv4Model:
                 padding=padding,
                 use_bias=not batch_norm,
                 kernel_initializer=ScaledRandomUniform(
-                    scale=tf.sqrt(2 / (size * size * self.image_size[2])), minval=-1, maxval=1
+                    scale=tf.sqrt(2 / (size * size * self.image_size[2])), minval=-0.01, maxval=0.01
                 ),
                 kernel_regularizer=tf.keras.regularizers.l2(0.0005),
             )(x)
 
             if batch_norm:
-                x = tf.keras.layers.BatchNormalization(moving_variance_initializer="zeros")(x)
+                x = tf.keras.layers.BatchNormalization(moving_variance_initializer="zeros", momentum = 0.5)(x)
 
             if activate:
                 if activation == "mish":
@@ -191,5 +192,9 @@ class YOLOv4Model:
 
         return feed
 
-    def __call__(self, input):
+
+    def predict(self, input):
         return self.model.predict(input)
+
+    def __call__(self, input, training=True):
+        return self.model(input, training=training)
