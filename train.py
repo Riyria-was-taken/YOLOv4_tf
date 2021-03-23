@@ -78,7 +78,6 @@ def calc_loss(layer_id, gt, preds, debug=False):
 
 
 
-img, input = read_img("test_img/doggos.jpg", 608)
 gt_boxes = tf.convert_to_tensor([[[0.7155, 0.539, 0.385, 0.572, 16],
                                   [0.363, 0.557, 0.452, 0.606, 16]]])
 gt_labels = tf.convert_to_tensor([[16, 16]])
@@ -126,7 +125,7 @@ def loss():
 # needs verification
 optimizer=tf.keras.optimizers.Adam()
 global_steps = tf.Variable(1, trainable=False, dtype=tf.int64)
-total_steps = 1000
+total_steps = 100
 warmup_steps = int(0.3 * total_steps)
 LR_INIT = 1e-3
 LR_END = 1e-6
@@ -148,11 +147,13 @@ for i in range(total_steps):
             )
         optimizer.lr.assign(lr.numpy())
 
-output = model.predict(input)
-print(output)
-print(calc_loss(0, gt_boxes, output[0]))
-print(calc_loss(1, gt_boxes, output[1]))
-print(calc_loss(2, gt_boxes, output[2]))
+import inference
+from img import add_bboxes
+img, input = read_img("test_img/doggos.jpg", 608)
+cls_names = open("coco-labels.txt", "r").read().split("\n")
+boxes, scores, labels = inference.infer(model, cls_names, input)
+pixels = add_bboxes(img, boxes, scores, labels)
+draw_img(pixels)
 quit()
 
 

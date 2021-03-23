@@ -1,8 +1,8 @@
 from model import YOLOv4Model
-from utils import decode_layer
 import numpy as np
 
 from img import read_img, draw_img, save_img, add_bboxes
+import inference
 
 import math
 import sys
@@ -17,51 +17,7 @@ def run_infer(weights_file, labels_file, image_path, out_filename):
 
     cls_names = open(labels_file, "r").read().split("\n")
 
-    pred_boxes = [[] for i in range(len(cls_names))]
-    output = [decode_layer(layer, i) for i, layer in enumerate(model.predict(input))]
-    for i, preds in enumerate(output):
-        s = preds.shape
-        gw, gh = s[1:3]
-        d = s[3]
-        for ix in range(gw):
-            for iy in range(gh):
-                for ir in range(3):
-                    data = preds[0, iy, ix, (d // 3) * ir : (d // 3) * (ir + 1)]
-
-                    x, y, w, h = data[ : 4]
-                    confidence = data[5 : ]
-                    cls = np.argmax(confidence)
-                    objectness = confidence[cls] * data[4]
-
-                    if objectness > 0.25:
-                        l, t, r, b = x - 0.5 * w, y - 0.5 * h, x + 0.5 * w, y + 0.5 * h
-                        pred_boxes[cls].append((objectness.numpy(), [l, t, r, b]))
-
-    # nms
-    def iou(box1, box2):
-        l = max(box1[0], box2[0])
-        t = max(box1[1], box2[1])
-        r = min(box1[2], box2[2])
-        b = min(box1[3], box2[3])
-        i = max(0, r - l) * max(0, b - t)
-        u = (box1[2] - box1[0]) * (box1[3] - box1[1]) + (box2[2] - box2[0]) * (box2[3] - box2[1]) - i
-        return i / u
-
-    boxes = []
-    scores = []
-    labels = []
-    for cls in range(len(cls_names)):
-        cls_preds = sorted(pred_boxes[cls])
-        while len(cls_preds) > 0:
-            score, box = cls_preds[-1]
-            boxes.append(box)
-            scores.append(score)
-            labels.append(cls_names[cls])
-            rem = []
-            for score2, box2 in cls_preds:
-                if iou(box, box2) < 0.213:
-                    rem.append((score2, box2))
-            cls_preds = rem
+    boxes, scores, labels = inference.infer(model, cls_names, input)
 
     pixels = add_bboxes(img, boxes, scores, labels)
     if out_filename:
