@@ -81,3 +81,64 @@ def mosaic(images, bboxes, labels, image_size):
     labels = dali.fn.cat(labels00, labels01, labels10, labels11)
 
     return images, bboxes, labels
+
+
+def mosaic_new(images, bboxes, labels, image_size):
+    zeros = dali.fn.constant(idata=0, shape=[])
+    zeros_f = dali.fn.constant(fdata=0.0, shape=[])
+    cuts_x = dali.fn.random.uniform(zeros, range=(0.2, 0.8))
+    cuts_y = dali.fn.random.uniform(zeros, range=(0.2, 0.8))
+
+    prop_x = dali.fn.cast(cuts_x * image_size[0], dtype=dali.types.DALIDataType.INT32)
+    prop_y = dali.fn.cast(cuts_y * image_size[1], dtype=dali.types.DALIDataType.INT32)
+
+    def generate_tiles(bboxes, labels, shape_x, shape_y):
+        idx = dali.fn.batch_permutation()
+        permuted_boxes = dali.fn.permute_batch(bboxes, indices=idx)
+        permuted_labels = dali.fn.permute_batch(labels, indices=idx)
+        shape = dali.fn.stack(shape_y, shape_x)
+        in_anchor, in_shape, bbx, lbl = dali.fn.random_bbox_crop(
+            permuted_boxes, permuted_labels, input_shape=image_size, crop_shape=shape, bbox_layout="xyXY",
+            shape_layout="HW"
+        )
+
+        in_anchor = dali.fn.stack(dali.fn.reductions.sum(in_anchor), dali.fn.reductions.sum(in_anchor)) - in_anchor
+        in_anchor_c = dali.fn.cast(in_anchor, dtype=dali.types.DALIDataType.INT32)
+
+        return idx, bbx, lbl, in_anchor_c, shape
+
+    perm_UL, bboxes_UL, labels_UL, in_anchor_UL, size_UL = \
+        generate_tiles(bboxes, labels, prop_x, prop_y)
+    perm_UR, bboxes_UR, labels_UR, in_anchor_UR, size_UR = \
+        generate_tiles(bboxes, labels, image_size[1] - prop_x, prop_y)
+    perm_LL, bboxes_LL, labels_LL, in_anchor_LL, size_LL = \
+        generate_tiles(bboxes, labels, prop_x, image_size[0] - prop_y)
+    perm_LR, bboxes_LR, labels_LR, in_anchor_LR, size_LR = \
+        generate_tiles(bboxes, labels, image_size[1] - prop_x, image_size[0] - prop_y)
+
+    idx = dali.fn.stack(perm_UL, perm_UR, perm_LL, perm_LR)
+    out_anchors = dali.fn.stack(
+        dali.fn.stack(zeros, zeros),
+        dali.fn.stack(zeros, prop_x),
+        dali.fn.stack(prop_y, zeros),
+        dali.fn.stack(prop_y, prop_x)
+    )
+    in_anchors = dali.fn.stack(
+        in_anchor_UL, in_anchor_UR, in_anchor_LL, in_anchor_LR
+    )
+    shapes = dali.fn.stack(
+        size_UL, size_UR, size_LL, size_LR
+    )
+
+    bboxes_UL = bbox_adjust(bboxes_UL, cuts_x, cuts_y, zeros_f, zeros_f)
+    bboxes_UR = bbox_adjust(bboxes_UR, 1.0 - cuts_x, cuts_y, cuts_x, zeros_f)
+    bboxes_LL = bbox_adjust(bboxes_LL, cuts_x, 1.0 - cuts_y, zeros_f, cuts_y)
+    bboxes_LR = bbox_adjust(bboxes_LR, 1.0 - cuts_x, 1.0 - cuts_y, cuts_x, cuts_y)
+
+    stacked_bboxes = dali.fn.cat(bboxes_UL, bboxes_UR, bboxes_LL, bboxes_LR)
+    stacked_labels = dali.fn.cat(labels_UL, labels_UR, labels_LL, labels_LR)
+
+    mosaic = dali.fn.multi_paste(images, in_ids=idx, output_size=image_size, in_anchors=in_anchors,
+                                 shapes=shapes, out_anchors=out_anchors, dtype=dali.types.DALIDataType.UINT8)
+
+    return mosaic, stacked_bboxes, stacked_labels

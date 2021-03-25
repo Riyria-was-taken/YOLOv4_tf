@@ -1,0 +1,21 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[[source]]
+url = "https://developer.download.nvidia.com/compute/redist"
+verify_ssl = true
+name = "nvidia"
+
+[packages]
+matplotlib = "*"
+nvidia-dali-cuda110 = {verion = "*", index = "nvidia"}
+nvidia-dali-tf-plugin-cuda110 = {verion = "*", index = "nvidia"}
+tensorflow = "*"
+opencv-python = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.8"

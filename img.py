@@ -33,6 +33,32 @@ def add_bboxes(pixels, boxes, scores, classes):
     return pixels
 
 
+def draw_bboxes(img, bboxes, size):
+    colors = [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+        [1, 1, 0],
+        [1, 0, 1],
+        [0, 1, 1]
+    ]
+
+    for i, bbox in enumerate(bboxes):
+        xs = int(bbox[0] * size[0])
+        ys = int(bbox[1] * size[1])
+        xe = int(bbox[2] * size[0]) - 1
+        ye = int(bbox[3] * size[1]) - 1
+
+        for c in range(3):
+            for x in range(xs, xe):
+                img[ys][x][c] = colors[i % len(colors)][c]
+                img[ye][x][c] = colors[i % len(colors)][c]
+            for y in range(ys, ye):
+                img[y][xs][c] = colors[i % len(colors)][c]
+                img[y][xe][c] = colors[i % len(colors)][c]
+    return img
+
+
 def draw_img(pixels):
     cv2.imshow("Image", pixels)
     cv2.waitKey(0)
