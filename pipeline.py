@@ -6,7 +6,7 @@ import ops
 
 class YOLOv4Pipeline:
     def __init__(
-        self, file_root, annotations_file, batch_size, image_size, num_threads, device_id, seed, output_input=False
+        self, file_root, annotations_file, batch_size, image_size, num_threads, device_id, seed
     ):
 
         self._batch_size = batch_size
@@ -20,9 +20,9 @@ class YOLOv4Pipeline:
         self._pipe = dali.pipeline.Pipeline(
             batch_size=batch_size, num_threads=num_threads, device_id=device_id, seed=seed
         )
-        self._define_pipeline(output_input)
+        self._define_pipeline()
 
-    def _define_pipeline(self, output_input):
+    def _define_pipeline(self):
         with self._pipe:
             images, bboxes, labels = ops.input(
                 self._file_root, self._annotations_file, self._device_id, self._num_threads
@@ -44,10 +44,7 @@ class YOLOv4Pipeline:
                 dtype=dali.types.FLOAT
             )
 
-            if output_input:
-                self._pipe.set_outputs(images_o, dali.fn.cat(bboxes_o, labels_o, axis=1), images, dali.fn.cat(bboxes, labels, axis=1))
-            else:
-                self._pipe.set_outputs(images_o, dali.fn.cat(bboxes_o, labels_o, axis=1))
+            self._pipe.set_outputs(images_o, dali.fn.cat(bboxes_o, labels_o, axis=1))
 
     def dataset(self):
         output_shapes = ((self._batch_size, self._image_size[0], self._image_size[0], 3), (self._batch_size, None, 5))
