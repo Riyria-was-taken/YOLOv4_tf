@@ -10,7 +10,7 @@ import math
 import os
 
 
-BATCH_SIZE = 1
+batch_size = 1
 
 
 def calc_loss(layer_id, gt, preds, debug=False):
@@ -25,7 +25,7 @@ def calc_loss(layer_id, gt, preds, debug=False):
     stride_x = 1 / gw
     stride_y = 1 / gh
     d = s[3]
-    truth_mask = tf.zeros((BATCH_SIZE, gw, gh, 3))
+    truth_mask = tf.zeros((batch_size, gw, gh, 3))
 
     box_loss = 0.0
     cls_loss = 0.0
@@ -44,9 +44,9 @@ def calc_loss(layer_id, gt, preds, debug=False):
 
     ious = utils.calc_ious(gt_shift, anchors)
     ious_argmax = tf.cast(tf.argmax(ious, axis=1), dtype=tf.int32)
-    batch_idx = tf.tile(tf.range(BATCH_SIZE)[ : , tf.newaxis], [1, box_shape[-1]])
+    batch_idx = tf.tile(tf.range(batch_size)[ : , tf.newaxis], [1, box_shape[-1]])
 
-    indices = tf.reshape(tf.stack([batch_idx, iy, ix, ious_argmax], axis=-1), [-1, 4])
+    indices = tf.stack([batch_idx, iy, ix, ious_argmax], axis=-1)
     pred_boxes = tf.gather_nd(layer_xywh, indices)
     box_loss = tf.math.reduce_sum(1.0 - utils.calc_gious(pred_boxes, gt_boxes))
 
@@ -54,7 +54,7 @@ def calc_loss(layer_id, gt, preds, debug=False):
     pred_cls = tf.gather_nd(layer_cls, indices)
     cls_loss = tf.math.reduce_sum(tf.math.square(pred_cls - cls_one_hot))
 
-    truth_mask = tf.tensor_scatter_nd_update(truth_mask, indices, tf.ones(tf.shape(indices)[0]))
+    truth_mask = tf.tensor_scatter_nd_update(truth_mask, indices, tf.ones(indices.shape[:-1], dtype=tf.float32))
 
     # TODO: add iou masking for noobj loss
     obj_loss = tf.math.reduce_sum(tf.math.square(truth_mask - layer_obj))
@@ -74,7 +74,7 @@ def calc_loss(layer_id, gt, preds, debug=False):
 #        obj_loss += tf.math.reduce_sum(tf.math.square(1 - objectness) * truth_mask[..., ir])
 #        obj_loss += tf.math.reduce_sum(tf.math.square(objectness) * inv_truth_mask[..., ir] * iou_mask)
 
-    return box_loss + obj_loss + cls_loss
+    return (box_loss + obj_loss + cls_loss) / batch_size
 
 
 
@@ -98,7 +98,6 @@ dali_extra = os.environ["DALI_EXTRA_PATH"]
 file_root = os.path.join(dali_extra, "db", "coco", "images")
 annotations_file = os.path.join(dali_extra, "db", "coco", "instances.json")
 
-batch_size = 1
 image_size = (608, 608)
 num_threads = 1
 device_id = 0
