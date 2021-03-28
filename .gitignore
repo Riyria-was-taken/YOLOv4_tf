@@ -1,2 +1,5 @@
 *.pyc
 *.weights
+.idea
+Pipfile
+Pipfile.lock

@@ -31,15 +31,20 @@ class YOLOv4Pipeline:
                 images, resize_x=self._image_size[0], resize_y=self._image_size[1]
             )
 
-            images, bboxes, labels = ops.mosaic(images, bboxes, labels, self._image_size)
+            images_o, bboxes_o, labels_o = ops.mosaic_new(images, bboxes, labels, self._image_size)
 
-            images = dali.fn.cast(images, dtype=dali.types.FLOAT) / 255.0
+            images_o = dali.fn.cast(images_o, dtype=dali.types.FLOAT) / 255.0
+            labels_o = dali.fn.cast(
+                dali.fn.transpose(dali.fn.stack(labels_o), perm=[1, 0]),
+                dtype=dali.types.FLOAT
+            )
+
             labels = dali.fn.cast(
                 dali.fn.transpose(dali.fn.stack(labels), perm=[1, 0]),
                 dtype=dali.types.FLOAT
             )
 
-            self._pipe.set_outputs(images, dali.fn.cat(bboxes, labels, axis=1))
+            self._pipe.set_outputs(images_o, dali.fn.cat(bboxes_o, labels_o, axis=1))
 
     def dataset(self):
         output_shapes = ((self._batch_size, self._image_size[0], self._image_size[0], 3), (self._batch_size, None, 5))
