@@ -10,7 +10,7 @@ import math
 import os
 
 
-batch_size = 1
+batch_size = 8
 
 
 def calc_loss(layer_id, gt, preds, debug=False):
@@ -32,6 +32,8 @@ def calc_loss(layer_id, gt, preds, debug=False):
 
     ix = tf.cast(tf.math.floor(tf.cast(gw, tf.float32) * gt_boxes[..., 0]), tf.int32)
     iy = tf.cast(tf.math.floor(tf.cast(gh, tf.float32) * gt_boxes[..., 1]), tf.int32)
+    ix = tf.clip_by_value(ix, 0, gw - 1)
+    iy = tf.clip_by_value(iy, 0, gh - 1)
 
     box_shape = tf.shape(gt_labels)
     zeros = tf.zeros_like(gt_labels, dtype=tf.float32)

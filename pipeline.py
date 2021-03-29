@@ -24,27 +24,25 @@ class YOLOv4Pipeline:
 
     def _define_pipeline(self):
         with self._pipe:
-            images, bboxes, labels = ops.input(
+            images, bboxes, classes = ops.input(
                 self._file_root, self._annotations_file, self._device_id, self._num_threads
             )
             images = dali.fn.resize(
                 images, resize_x=self._image_size[0], resize_y=self._image_size[1]
             )
 
-            images_o, bboxes_o, labels_o = ops.mosaic_new(images, bboxes, labels, self._image_size)
+            images, bboxes, classes = ops.mosaic_new(images, bboxes, classes, self._image_size)
 
-            images_o = dali.fn.cast(images_o, dtype=dali.types.FLOAT) / 255.0
-            labels_o = dali.fn.cast(
-                dali.fn.transpose(dali.fn.stack(labels_o), perm=[1, 0]),
+            images = dali.fn.cast(images, dtype=dali.types.FLOAT) / 255.0
+            classes = dali.fn.cast(
+                dali.fn.transpose(dali.fn.stack(classes), perm=[1, 0]),
                 dtype=dali.types.FLOAT
             )
 
-            labels = dali.fn.cast(
-                dali.fn.transpose(dali.fn.stack(labels), perm=[1, 0]),
-                dtype=dali.types.FLOAT
-            )
+            labels = dali.fn.cat(bboxes, classes, axis=1)
+            labels = dali.fn.pad(labels)
 
-            self._pipe.set_outputs(images_o, dali.fn.cat(bboxes_o, labels_o, axis=1))
+            self._pipe.set_outputs(images, labels)
 
     def dataset(self):
         output_shapes = ((self._batch_size, self._image_size[0], self._image_size[0], 3), (self._batch_size, None, 5))

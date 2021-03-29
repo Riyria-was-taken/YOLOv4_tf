@@ -23,6 +23,14 @@ def xywh_to_ltrb(boxes):
     h = boxes[..., 3]
     return tf.stack([x - w / 2, y - h / 2, x + w / 2, y + h / 2], axis=-1)
 
+def ltrb_to_xywh(boxes):
+    boxes = tf.convert_to_tensor(boxes)
+    l = boxes[..., 0]
+    t = boxes[..., 1]
+    r = boxes[..., 2]
+    b = boxes[..., 3]
+    return tf.stack([(l + r) / 2, (t + b) / 2, r - l, b - t], axis=-1)
+
 def calc_ious(boxes1, boxes2):
     ltrb1 = xywh_to_ltrb(boxes1)
     ltrb2 = xywh_to_ltrb(boxes2)

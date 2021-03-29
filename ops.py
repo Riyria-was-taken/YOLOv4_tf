@@ -2,16 +2,16 @@ import nvidia.dali as dali
 
 
 def input(file_root, annotations_file, device_id, num_threads, random_shuffle=True):
-    inputs, bboxes, classes = dali.fn.coco_reader(
+    inputs, bboxes, classes = dali.fn.readers.coco(
         file_root=file_root,
         annotations_file=annotations_file,
-        ltrb=True,
+        ltrb=False,
         shard_id=device_id,
         num_shards=num_threads,
         ratio=True,
         random_shuffle=random_shuffle,
     )
-    images = dali.fn.image_decoder(inputs, device="cpu", output_type=dali.types.RGB)
+    images = dali.fn.decoders.image(inputs, device="cpu", output_type=dali.types.RGB)
     return images, bboxes, classes
 
 
