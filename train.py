@@ -10,12 +10,13 @@ import math
 import os
 
 
-batch_size = 8
+batch_size = 32
 
 
 def calc_loss(layer_id, gt, preds, debug=False):
     gt_boxes = gt[..., : 4]
     gt_labels = tf.cast(gt[..., 4], tf.int32)
+    gt_mask = tf.where(gt_labels == -1, 0.0, 1.0)
     layer_xywh, layer_obj, layer_cls = utils.decode_layer(preds, layer_id)
     cls_count = layer_cls.shape[-1]
 
@@ -50,13 +51,15 @@ def calc_loss(layer_id, gt, preds, debug=False):
 
     indices = tf.stack([batch_idx, iy, ix, ious_argmax], axis=-1)
     pred_boxes = tf.gather_nd(layer_xywh, indices)
-    box_loss = tf.math.reduce_sum(1.0 - utils.calc_gious(pred_boxes, gt_boxes))
+    box_loss = tf.math.reduce_sum(gt_mask * (1.0 - utils.calc_gious(pred_boxes, gt_boxes)))
 
     cls_one_hot = tf.one_hot(gt_labels, cls_count)
     pred_cls = tf.gather_nd(layer_cls, indices)
-    cls_loss = tf.math.reduce_sum(tf.math.square(pred_cls - cls_one_hot))
+    cls_diffs = tf.math.reduce_sum(tf.math.square(pred_cls - cls_one_hot), axis=-1)
+    cls_loss = tf.math.reduce_sum(gt_mask * cls_diffs)
 
-    truth_mask = tf.tensor_scatter_nd_update(truth_mask, indices, tf.ones(indices.shape[:-1], dtype=tf.float32))
+    indices_not_null = tf.gather_nd(indices, tf.where(gt_labels != -1))
+    truth_mask = tf.tensor_scatter_nd_update(truth_mask, indices_not_null, tf.ones(indices_not_null.shape[:-1], dtype=tf.float32))
 
     # TODO: add iou masking for noobj loss
     obj_loss = tf.math.reduce_sum(tf.math.square(truth_mask - layer_obj))
@@ -115,8 +118,11 @@ var_list = model.model.trainable_weights
 iterator = iter(dataset)
 
 def loss():
+    print("Data")
     input, gt_boxes = iterator.get_next()
+    print("Infer")
     output = model(input)
+    print("Loss")
     loss0 = calc_loss(0, gt_boxes, output[0])
     loss1 = calc_loss(1, gt_boxes, output[1])
     loss2 = calc_loss(2, gt_boxes, output[2])
@@ -134,6 +140,7 @@ for i in range(total_steps):
     with tf.GradientTape() as tape:
 
         total_loss = loss()
+        print("Optimize")
         gradients = tape.gradient(total_loss, model.model.trainable_variables)
         optimizer.apply_gradients(zip(gradients, model.model.trainable_variables))
 

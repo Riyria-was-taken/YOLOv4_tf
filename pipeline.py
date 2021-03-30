@@ -40,7 +40,7 @@ class YOLOv4Pipeline:
             )
 
             labels = dali.fn.cat(bboxes, classes, axis=1)
-            labels = dali.fn.pad(labels)
+            labels = dali.fn.pad(labels, fill_value=-1)
 
             self._pipe.set_outputs(images, labels)
 

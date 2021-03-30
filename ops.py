@@ -99,7 +99,7 @@ def mosaic_new(images, bboxes, labels, image_size):
         shape = dali.fn.stack(shape_y, shape_x)
         in_anchor, in_shape, bbx, lbl = dali.fn.random_bbox_crop(
             permuted_boxes, permuted_labels, input_shape=image_size, crop_shape=shape, bbox_layout="xyXY",
-            shape_layout="HW"
+            shape_layout="HW", allow_no_crop=False
         )
 
         in_anchor = dali.fn.stack(dali.fn.reductions.sum(in_anchor), dali.fn.reductions.sum(in_anchor)) - in_anchor
