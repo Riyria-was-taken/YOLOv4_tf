@@ -30,7 +30,7 @@ def run_training(file_root, annotations, batch_size, steps, output):
 
     model = train.train(file_root, annotations, batch_size, steps)
     if output:
-        model.save_weights_tf(output)
+        model.save_weights(output)
 
 
 
