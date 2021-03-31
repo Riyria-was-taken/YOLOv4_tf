@@ -26,15 +26,12 @@ def run_infer(weights_file, labels_file, image_path, out_filename):
     else:
         draw_img(pixels)
 
-def run_training(file_root, annotations, batch_size, steps):
+def run_training(file_root, annotations, batch_size, steps, output):
 
     model = train.train(file_root, annotations, batch_size, steps)
+    if output:
+        model.save_weights_tf(output)
 
-    img, input = read_img("test_img/doggos.jpg", 608)
-    cls_names = open("coco-labels.txt", "r").read().split("\n")
-    boxes, scores, labels = inference.infer(model, cls_names, input)
-    pixels = add_bboxes(img, boxes, scores, labels)
-    draw_img(pixels)
 
 
 if __name__ == "__main__":
@@ -53,6 +50,7 @@ if __name__ == "__main__":
     parser_train.add_argument("annotations")
     parser_train.add_argument("--batch_size", "-b", default="32")
     parser_train.add_argument("--steps", "-s", default="100")
+    parser_train.add_argument("--output", "-o", default="trained.h5")
     subparsers.add_parser("verify")
 
     args = parser.parse_args()
@@ -62,6 +60,6 @@ if __name__ == "__main__":
     elif args.action == "train":
         batch_size = int(args.batch_size)
         steps = int(args.steps)
-        run_training(args.file_root, args.annotations, batch_size, steps)
+        run_training(args.file_root, args.annotations, batch_size, steps, args.output)
     else:
         print("The " + args.action + " action is not yet implemented :<")

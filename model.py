@@ -15,7 +15,18 @@ class YOLOv4Model:
     def summary(self):
         self.model.summary()
 
+
     def load_weights(self, weights_file):
+        if weights_file.endswith(".h5"):
+            self._load_weights_tf(weights_file)
+        else:
+            self._load_weights_yolo(weights_file)
+
+    def save_weights(self, weights_file):
+        self._save_weights_tf(weights_file)
+
+
+    def _load_weights_yolo(self, weights_file):
         with open(weights_file, "rb") as f:
             major, minor, revision = np.fromfile(f, dtype=np.int32, count=3)
             if (major * 10 + minor) >= 2:
@@ -55,6 +66,12 @@ class YOLOv4Model:
                     conv_layer.set_weights([conv_weights, conv_bias])
 
             assert len(f.read()) == 0, "failed to read all data"
+
+    def _save_weights_tf(self, weights_file):
+        self.model.save_weights(weights_file, save_format='h5')
+
+    def _load_weights_tf(self, weights_file):
+        self.model.load_weights(weights_file)
 
 
     def darknetConv(
