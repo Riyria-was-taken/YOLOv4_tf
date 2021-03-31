@@ -9,7 +9,7 @@ def input(file_root, annotations_file, device_id, num_threads, random_shuffle=Tr
         shard_id=device_id,
         num_shards=num_threads,
         ratio=True,
-        random_shuffle=random_shuffle,
+        random_shuffle=random_shuffle
     )
     images = dali.fn.decoders.image(inputs, device="cpu", output_type=dali.types.RGB)
     return images, bboxes, classes

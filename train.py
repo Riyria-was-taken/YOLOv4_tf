@@ -10,9 +10,6 @@ import math
 import os
 
 
-batch_size = 32
-
-
 def calc_loss(layer_id, gt, preds, debug=False):
     gt_boxes = gt[..., : 4]
     gt_labels = tf.cast(gt[..., 4], tf.int32)
@@ -21,6 +18,7 @@ def calc_loss(layer_id, gt, preds, debug=False):
     cls_count = layer_cls.shape[-1]
 
     s = tf.shape(preds) # (batch, x, y, ratio * stuff)
+    batch_size = s[0]
     gw = s[1]
     gh = s[2]
     stride_x = 1 / gw
@@ -79,14 +77,7 @@ def calc_loss(layer_id, gt, preds, debug=False):
 #        obj_loss += tf.math.reduce_sum(tf.math.square(1 - objectness) * truth_mask[..., ir])
 #        obj_loss += tf.math.reduce_sum(tf.math.square(objectness) * inv_truth_mask[..., ir] * iou_mask)
 
-    return (box_loss + obj_loss + cls_loss) / batch_size
-
-
-
-gt_boxes = tf.convert_to_tensor([[[0.7155, 0.539, 0.385, 0.572, 16],
-                                  [0.363, 0.557, 0.452, 0.606, 16]]])
-gt_labels = tf.convert_to_tensor([[16, 16]])
-gt_count = 2
+    return (box_loss + obj_loss + cls_loss) / tf.cast(batch_size, dtype=tf.float32)
 
 anchor_sizes = [
     [(12, 16), (19, 36), (40, 28)],
@@ -95,74 +86,61 @@ anchor_sizes = [
 ]
 scales = [1.2, 1.1, 1.05]
 
-model = YOLOv4Model()
-#model.load_weights("yolov4.weights")
 
+def train(file_root, annotations_file, batch_size, total_steps):
+    model = YOLOv4Model()
+    #model.load_weights("yolov4.weights")
 
-dali_extra = os.environ["DALI_EXTRA_PATH"]
-file_root = os.path.join(dali_extra, "db", "coco", "images")
-annotations_file = os.path.join(dali_extra, "db", "coco", "instances.json")
+    image_size = (608, 608)
+    num_threads = 1
+    device_id = 0
+    seed = int.from_bytes(os.urandom(4), "little")
 
-image_size = (608, 608)
-num_threads = 1
-device_id = 0
-seed = int.from_bytes(os.urandom(4), "little")
+    pipeline = YOLOv4Pipeline(
+        file_root, annotations_file, batch_size, image_size, num_threads, device_id, seed
+    )
+    dataset = pipeline.dataset()
 
-pipeline = YOLOv4Pipeline(
-    file_root, annotations_file, batch_size, image_size, num_threads, device_id, seed
-)
-dataset = pipeline.dataset()
+    var_list = model.model.trainable_weights
+    iterator = iter(dataset)
 
+    def loss():
+        print("Data")
+        input, gt_boxes = iterator.get_next()
+        print("Infer")
+        output = model(input)
+        print("Loss")
+        loss0 = calc_loss(0, gt_boxes, output[0])
+        loss1 = calc_loss(1, gt_boxes, output[1])
+        loss2 = calc_loss(2, gt_boxes, output[2])
+        return loss0 + loss1 + loss2
 
-var_list = model.model.trainable_weights
-iterator = iter(dataset)
+    # needs verification
+    optimizer=tf.keras.optimizers.Adam()
+    global_steps = tf.Variable(1, trainable=False, dtype=tf.int64)
+    warmup_steps = int(0.3 * total_steps)
+    LR_INIT = 1e-3
+    LR_END = 1e-6
+    for i in range(total_steps):
+        with tf.GradientTape() as tape:
 
-def loss():
-    print("Data")
-    input, gt_boxes = iterator.get_next()
-    print("Infer")
-    output = model(input)
-    print("Loss")
-    loss0 = calc_loss(0, gt_boxes, output[0])
-    loss1 = calc_loss(1, gt_boxes, output[1])
-    loss2 = calc_loss(2, gt_boxes, output[2])
-    return loss0 + loss1 + loss2
+            total_loss = loss()
+            print("Optimize")
+            gradients = tape.gradient(total_loss, model.model.trainable_variables)
+            optimizer.apply_gradients(zip(gradients, model.model.trainable_variables))
 
+            tf.print("=> TEST STEP %4d   lr: %.6f   loss: %4.2f" % (global_steps, optimizer.lr.numpy(), total_loss))
 
-# needs verification
-optimizer=tf.keras.optimizers.Adam()
-global_steps = tf.Variable(1, trainable=False, dtype=tf.int64)
-total_steps = 100
-warmup_steps = int(0.3 * total_steps)
-LR_INIT = 1e-3
-LR_END = 1e-6
-for i in range(total_steps):
-    with tf.GradientTape() as tape:
+            global_steps.assign_add(1)
+            if global_steps < warmup_steps:
+                lr = global_steps / warmup_steps * LR_INIT
+            else:
+                lr = LR_END + 0.5 * (LR_INIT - LR_END) * (
+                    (1 + tf.cos((global_steps - warmup_steps) / (total_steps - warmup_steps) * np.pi))
+                )
+            optimizer.lr.assign(lr.numpy())
 
-        total_loss = loss()
-        print("Optimize")
-        gradients = tape.gradient(total_loss, model.model.trainable_variables)
-        optimizer.apply_gradients(zip(gradients, model.model.trainable_variables))
-
-        tf.print("=> TEST STEP %4d   lr: %.6f   loss: %4.2f" % (global_steps, optimizer.lr.numpy(), total_loss))
-
-        global_steps.assign_add(1)
-        if global_steps < warmup_steps:
-            lr = global_steps / warmup_steps * LR_INIT
-        else:
-            lr = LR_END + 0.5 * (LR_INIT - LR_END) * (
-                (1 + tf.cos((global_steps - warmup_steps) / (total_steps - warmup_steps) * np.pi))
-            )
-        optimizer.lr.assign(lr.numpy())
-
-import inference
-from img import add_bboxes
-img, input = read_img("test_img/doggos.jpg", 608)
-cls_names = open("coco-labels.txt", "r").read().split("\n")
-boxes, scores, labels = inference.infer(model, cls_names, input)
-pixels = add_bboxes(img, boxes, scores, labels)
-draw_img(pixels)
-quit()
+    return model
 
 
 
