@@ -6,9 +6,9 @@ import ops
 
 class YOLOv4Pipeline:
     def __init__(
-        self, file_root, annotations_file, batch_size, image_size, num_threads, device_id, seed
+        self, file_root, annotations_file, batch_size, image_size, num_threads, device_id, seed, use_gpu
     ):
-
+        self._use_gpu = use_gpu
         self._batch_size = batch_size
         self._image_size = image_size
         self._file_root = file_root
@@ -25,7 +25,7 @@ class YOLOv4Pipeline:
     def _define_pipeline(self):
         with self._pipe:
             images, bboxes, classes = ops.input(
-                self._file_root, self._annotations_file, self._device_id, self._num_threads
+                self._file_root, self._annotations_file, self._device_id, self._num_threads, "mixed" if self._use_gpu else "cpu"
             )
             images = dali.fn.resize(
                 images, resize_x=self._image_size[0], resize_y=self._image_size[1]
