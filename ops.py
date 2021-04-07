@@ -32,7 +32,7 @@ def generate_tiles(images, bboxes, labels, shape_x, shape_y, image_size):
         crop_shape=dali.fn.stack(shape_x, shape_y),
         input_shape=image_size,
         bbox_layout="xyXY",
-        allow_no_crop=False,
+        thresholds=[0.0]
     )
     images = dali.fn.slice(images, crop_anchor, crop_shape, normalized_anchor=False, normalized_shape=False)
     return images, bboxes, labels
@@ -98,8 +98,14 @@ def mosaic_new(images, bboxes, labels, image_size):
         permuted_labels = dali.fn.permute_batch(labels, indices=idx)
         shape = dali.fn.stack(shape_y, shape_x)
         in_anchor, in_shape, bbx, lbl = dali.fn.random_bbox_crop(
-            permuted_boxes, permuted_labels, input_shape=image_size, crop_shape=shape, bbox_layout="xyXY",
-            shape_layout="HW", allow_no_crop=False
+            permuted_boxes,
+            permuted_labels,
+            input_shape=image_size,
+            crop_shape=shape,
+            bbox_layout="xyXY",
+            shape_layout="HW",
+            allow_no_crop=False,
+            total_num_attempts=64
         )
 
         in_anchor = dali.fn.stack(dali.fn.reductions.sum(in_anchor), dali.fn.reductions.sum(in_anchor)) - in_anchor

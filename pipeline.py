@@ -42,7 +42,7 @@ class YOLOv4Pipeline:
             labels = dali.fn.cat(bboxes, classes, axis=1)
             labels = dali.fn.pad(labels, fill_value=-1)
 
-            self._pipe.set_outputs(images, labels)
+            self._pipe.set_outputs(images.gpu(), labels.gpu())
 
     def dataset(self):
         output_shapes = ((self._batch_size, self._image_size[0], self._image_size[0], 3), (self._batch_size, None, 5))
