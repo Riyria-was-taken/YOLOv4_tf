@@ -10,6 +10,9 @@ import math
 import os
 
 
+SET_MEMORY_GROWTH = True
+
+
 def calc_loss(layer_id, gt, preds, debug=False):
     gt_boxes = gt[..., : 4]
     gt_labels = tf.cast(gt[..., 4], tf.int32)
@@ -88,6 +91,11 @@ scales = [1.2, 1.1, 1.05]
 
 
 def train(file_root, annotations_file, batch_size, total_steps, use_gpu):
+
+    if SET_MEMORY_GROWTH:
+        physical_devices = tf.config.list_physical_devices('GPU')
+        tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
     model = YOLOv4Model()
     #model.load_weights("yolov4.weights")
 

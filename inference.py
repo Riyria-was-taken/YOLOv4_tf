@@ -37,7 +37,8 @@ def infer(model, cls_names, input):
         cls_preds = sorted(pred_boxes[cls])
         while len(cls_preds) > 0:
             score, box = cls_preds[-1]
-            boxes.append(box)
+            box_xywh = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2, box[2] - box[0], box[3] - box[1]
+            boxes.append(box_xywh)
             scores.append(score)
             labels.append(cls_names[cls])
             rem = []
