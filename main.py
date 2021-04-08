@@ -26,9 +26,9 @@ def run_infer(weights_file, labels_file, image_path, out_filename):
     else:
         draw_img(pixels)
 
-def run_training(file_root, annotations, batch_size, steps, output):
+def run_training(file_root, annotations, batch_size, steps, output, use_gpu):
 
-    model = train.train(file_root, annotations, batch_size, steps)
+    model = train.train(file_root, annotations, batch_size, steps, use_gpu)
     if output:
         model.save_weights(output)
 
@@ -51,6 +51,7 @@ if __name__ == "__main__":
     parser_train.add_argument("--batch_size", "-b", default="32")
     parser_train.add_argument("--steps", "-s", default="100")
     parser_train.add_argument("--output", "-o", default="trained.h5")
+    parser_train.add_argument("--use_gpu", "-g", default="True")
     subparsers.add_parser("verify")
 
     args = parser.parse_args()
@@ -60,6 +61,7 @@ if __name__ == "__main__":
     elif args.action == "train":
         batch_size = int(args.batch_size)
         steps = int(args.steps)
-        run_training(args.file_root, args.annotations, batch_size, steps, args.output)
+        use_gpu = bool(args.use_gpu)
+        run_training(args.file_root, args.annotations, batch_size, steps, args.output, use_gpu)
     else:
         print("The " + args.action + " action is not yet implemented :<")

@@ -87,7 +87,7 @@ anchor_sizes = [
 scales = [1.2, 1.1, 1.05]
 
 
-def train(file_root, annotations_file, batch_size, total_steps):
+def train(file_root, annotations_file, batch_size, total_steps, use_gpu):
     model = YOLOv4Model()
     #model.load_weights("yolov4.weights")
 
@@ -97,7 +97,7 @@ def train(file_root, annotations_file, batch_size, total_steps):
     seed = int.from_bytes(os.urandom(4), "little")
 
     pipeline = YOLOv4Pipeline(
-        file_root, annotations_file, batch_size, image_size, num_threads, device_id, seed
+        file_root, annotations_file, batch_size, image_size, num_threads, device_id, seed, use_gpu
     )
     dataset = pipeline.dataset()
 
