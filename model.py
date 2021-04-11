@@ -88,14 +88,16 @@ def calc_loss(layer_id, gt, preds, debug=False):
 class YOLOv4Training(tf.keras.Model):
     def __init__(self, input, output):
         super(YOLOv4Training, self).__init__(input, output)
-        self.global_steps = tf.Variable(1, trainable=False, dtype=tf.int64)
-        self.total_steps = 5000
-        self.warmup_steps = int(0.3 * self.total_steps)
         self.lr_init = 1e-3
         self.lr_end = 1e-6
         self.loss_tracker = tf.keras.metrics.Mean(name="loss")
         self.lr_tracker = tf.keras.metrics.Mean(name="lr")
 
+    def fit(self, dataset, **kwargs):
+        self.global_steps = tf.Variable(1, trainable=False, dtype=tf.int32)
+        self.total_steps = kwargs['epochs'] + kwargs['steps_per_epoch']
+        self.warmup_steps = int(0.3 * self.total_steps)
+        super(YOLOv4Training, self).fit(dataset, **kwargs)
 
     def train_step(self, data):
 

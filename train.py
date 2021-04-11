@@ -17,7 +17,7 @@ SET_MEMORY_GROWTH = True
 
 
 
-def train(file_root, annotations_file, batch_size, total_steps, use_gpu):
+def train(file_root, annotations_file, batch_size, epochs, steps_per_epoch, use_gpu):
 
     if SET_MEMORY_GROWTH:
         physical_devices = tf.config.list_physical_devices('GPU')
@@ -39,7 +39,7 @@ def train(file_root, annotations_file, batch_size, total_steps, use_gpu):
     model.model.compile(
         optimizer=tf.keras.optimizers.Adam()
     )
-    model.model.fit(pipeline.dataset(), epochs=5, steps_per_epoch=1000)
+    model.model.fit(pipeline.dataset(), epochs=epochs, steps_per_epoch=steps_per_epoch)
 
     return model
 
