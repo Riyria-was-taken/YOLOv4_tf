@@ -5,3 +5,5 @@ Pipfile
 Pipfile.lock
 pk_run.sh
 *.h5
+
+logs/

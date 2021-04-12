@@ -10,7 +10,7 @@ import math
 import os
 
 
-SET_MEMORY_GROWTH = True
+SET_MEMORY_GROWTH = False
 
 
 
@@ -36,10 +36,20 @@ def train(file_root, annotations_file, batch_size, epochs, steps_per_epoch, use_
     )
     dataset = pipeline.dataset()
 
+    tb_callback = tf.keras.callbacks.TensorBoard(
+        log_dir='logs',
+        update_freq='batch'
+    )
+
     model.model.compile(
         optimizer=tf.keras.optimizers.Adam()
     )
-    model.model.fit(pipeline.dataset(), epochs=epochs, steps_per_epoch=steps_per_epoch)
+    model.model.fit(
+        pipeline.dataset(),
+        epochs=epochs,
+        steps_per_epoch=steps_per_epoch,
+        callbacks=[tb_callback]
+    )
 
     return model
 
