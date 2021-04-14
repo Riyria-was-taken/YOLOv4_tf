@@ -15,6 +15,7 @@ scales = [1.2, 1.1, 1.05]
 def calc_loss(layer_id, gt, preds, debug=False):
     gt_boxes = gt[..., : 4]
     gt_labels = tf.cast(gt[..., 4], tf.int32)
+    gt_count = tf.shape(gt_labels)[-1]
     gt_mask = tf.where(gt_labels == -1, 0.0, 1.0)
     layer_xywh, layer_obj, layer_cls = utils.decode_layer(preds, layer_id)
     cls_count = layer_cls.shape[-1]
@@ -60,24 +61,14 @@ def calc_loss(layer_id, gt, preds, debug=False):
 
     indices_not_null = tf.gather_nd(indices, tf.where(gt_labels != -1))
     truth_mask = tf.tensor_scatter_nd_update(truth_mask, indices_not_null, tf.ones_like(indices_not_null, dtype=tf.float32)[:,0])
+    inv_truth_mask = 1.0 - truth_mask
 
     # TODO: add iou masking for noobj loss
-    obj_loss = tf.math.reduce_sum(tf.math.square(truth_mask - layer_obj))
-
-#    for ir in range(3):
-#        data = layer[..., (d // 3) * ir : (d // 3) * (ir + 1)]
-#        pred_boxes = data[0, ..., : 4]
-#        objectness = data[0, ..., 4]
-#
-#        best_ious = tf.zeros([1, gw, gh])
-#        for gt_box in gt_boxes[0]:
-#            gt_box_exp = tf.tile(tf.reshape(gt_box, (1, 1, 1, 4)), [1, gw, gh, 1])
-#            ious = utils.calc_ious(pred_boxes, gt_box_exp)
-#            best_ious = tf.math.maximum(best_ious, ious)
-#        iou_mask = tf.cast(best_ious < 0.7, tf.float32)
-#
-#        obj_loss += tf.math.reduce_sum(tf.math.square(1 - objectness) * truth_mask[..., ir])
-#        obj_loss += tf.math.reduce_sum(tf.math.square(objectness) * inv_truth_mask[..., ir] * iou_mask)
+    obj_loss = tf.math.reduce_sum(tf.math.square(1 - layer_obj) * truth_mask)
+    gt_boxes_exp = tf.tile(tf.reshape(gt_boxes, (batch_size, 1, 1, 1, gt_count, 4)), [1, gw, gh, 3, 1, 1])
+    pred_boxes_exp = tf.tile(tf.reshape(layer_xywh, (batch_size, gw, gh, 3, 1, 4)), [1, 1, 1, 1, gt_count, 1])
+    iou_mask = tf.cast(tf.math.reduce_max(utils.calc_ious(gt_boxes_exp, pred_boxes_exp), axis=-1) < 0.7, tf.float32)
+    obj_loss += tf.math.reduce_sum(tf.math.square(layer_obj) * inv_truth_mask * iou_mask)
 
     return (box_loss + obj_loss + cls_loss) / tf.cast(batch_size, dtype=tf.float32)
 
