@@ -63,14 +63,13 @@ def calc_loss(layer_id, gt, preds, debug=False):
     truth_mask = tf.tensor_scatter_nd_update(truth_mask, indices_not_null, tf.ones_like(indices_not_null, dtype=tf.float32)[:,0])
     inv_truth_mask = 1.0 - truth_mask
 
-    # TODO: add iou masking for noobj loss
     obj_loss = tf.math.reduce_sum(tf.math.square(1 - layer_obj) * truth_mask)
     gt_boxes_exp = tf.tile(tf.reshape(gt_boxes, (batch_size, 1, 1, 1, gt_count, 4)), [1, gw, gh, 3, 1, 1])
     pred_boxes_exp = tf.tile(tf.reshape(layer_xywh, (batch_size, gw, gh, 3, 1, 4)), [1, 1, 1, 1, gt_count, 1])
     iou_mask = tf.cast(tf.math.reduce_max(utils.calc_ious(gt_boxes_exp, pred_boxes_exp), axis=-1) < 0.7, tf.float32)
     obj_loss += tf.math.reduce_sum(tf.math.square(layer_obj) * inv_truth_mask * iou_mask)
 
-    return (box_loss + obj_loss + cls_loss) / tf.cast(batch_size, dtype=tf.float32)
+    return (0.05 * box_loss + 1.0 * obj_loss + 0.5 * cls_loss) / tf.cast(batch_size, dtype=tf.float32)
 
 
 
