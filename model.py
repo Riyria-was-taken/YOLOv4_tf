@@ -85,7 +85,7 @@ class YOLOv4Training(tf.keras.Model):
 
     def fit(self, dataset, **kwargs):
         self.global_steps = tf.Variable(1, trainable=False, dtype=tf.int32)
-        self.total_steps = kwargs['epochs'] + kwargs['steps_per_epoch']
+        self.total_steps = kwargs['epochs'] * kwargs['steps_per_epoch']
         self.warmup_steps = int(0.3 * self.total_steps)
         super(YOLOv4Training, self).fit(dataset, **kwargs)
 
