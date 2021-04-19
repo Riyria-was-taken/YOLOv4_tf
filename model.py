@@ -147,6 +147,7 @@ class YOLOv4Model:
         output = self.CSPDarknet53WithSPP()(input)
         output = self.YOLOHead()(output)
         self.model = YOLOv4Training(input, output)
+        self.model.supervisor = self
 
     def summary(self):
         self.model.summary()

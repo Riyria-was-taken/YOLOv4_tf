@@ -13,6 +13,12 @@ import os
 SET_MEMORY_GROWTH = False
 
 
+class TrainCallback(tf.keras.callbacks.Callback):
+
+    def on_epoch_begin(self, epoch, logs=None):
+        self.model.supervisor.save_weights('ckpt/epoch_' + str(epoch) + '.h5')
+
+
 
 
 
@@ -48,7 +54,7 @@ def train(file_root, annotations_file, batch_size, epochs, steps_per_epoch, use_
         pipeline.dataset(),
         epochs=epochs,
         steps_per_epoch=steps_per_epoch,
-        callbacks=[tb_callback]
+        callbacks=[tb_callback, TrainCallback()]
     )
 
     return model
