@@ -13,21 +13,24 @@ import os
 SET_MEMORY_GROWTH = False
 
 
-class TrainCallback(tf.keras.callbacks.Callback):
+class SaveWeightsCallback(tf.keras.callbacks.Callback):
+
+    def __init__(self, ckpt_dir):
+        self.ckpt_dir = ckpt_dir
 
     def on_epoch_begin(self, epoch, logs=None):
-        self.model.supervisor.save_weights('ckpt/epoch_' + str(epoch) + '.h5')
+        self.model.supervisor.save_weights(self.ckpt_dir + '/epoch_' + str(epoch) + '.h5')
 
 
-
-
-
-
-def train(file_root, annotations_file, batch_size, epochs, steps_per_epoch, use_gpu):
+def train(file_root, annotations_file, batch_size, epochs, steps_per_epoch, **kwargs):
 
     if SET_MEMORY_GROWTH:
         physical_devices = tf.config.list_physical_devices('GPU')
         tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+    use_gpu = kwargs.get("use_gpu", True)
+    log_dir = kwargs.get("log_dir")
+    ckpt_dir = kwargs.get("ckpt_dir")
 
     model = YOLOv4Model()
     #model.load_weights("yolov4.weights")
@@ -42,32 +45,24 @@ def train(file_root, annotations_file, batch_size, epochs, steps_per_epoch, use_
     )
     dataset = pipeline.dataset()
 
-    tb_callback = tf.keras.callbacks.TensorBoard(
-        log_dir='logs',
-        update_freq='batch'
-    )
+    callbacks = []
+    if log_dir:
+        callbacks.append(tf.keras.callbacks.TensorBoard(
+            log_dir=log_dir,
+            update_freq='epoch'
+        ))
+    if ckpt_dir:
+        callbacks.append(SaveWeightsCallback(ckpt_dir))
 
     model.model.compile(
         optimizer=tf.keras.optimizers.Adam()
     )
+
     model.model.fit(
         pipeline.dataset(),
         epochs=epochs,
         steps_per_epoch=steps_per_epoch,
-        callbacks=[tb_callback, TrainCallback()]
+        callbacks=callbacks
     )
 
     return model
-
-
-
-
-
-'''
-model.model.compile(
-    optimizer=tf.keras.optimizers.Adam(),
-    loss=tuple([lambda x, y : calc_loss(i, x, y) for i in range(3)]),
-    loss_weights=[1.0, 1.0, 1.0]
-)
-model.model.fit(pipeline.dataset(), epochs=5, steps_per_epoch=10)
-'''
