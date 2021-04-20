@@ -19,7 +19,7 @@ class SaveWeightsCallback(tf.keras.callbacks.Callback):
         self.ckpt_dir = ckpt_dir
 
     def on_epoch_begin(self, epoch, logs=None):
-        self.model.supervisor.save_weights(self.ckpt_dir + '/epoch_' + str(epoch) + '.h5')
+        self.model.save_weights(self.ckpt_dir + '/epoch_' + str(epoch) + '.h5')
 
 
 def train(file_root, annotations_file, batch_size, epochs, steps_per_epoch, **kwargs):
@@ -60,11 +60,11 @@ def train(file_root, annotations_file, batch_size, epochs, steps_per_epoch, **kw
     if ckpt_dir:
         callbacks.append(SaveWeightsCallback(ckpt_dir))
 
-    model.model.compile(
+    model.compile(
         optimizer=tf.keras.optimizers.Adam()
     )
 
-    model.model.fit(
+    model.fit(
         pipeline.dataset(),
         epochs=epochs,
         steps_per_epoch=steps_per_epoch,

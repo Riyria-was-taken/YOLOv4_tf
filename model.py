@@ -74,23 +74,31 @@ def calc_loss(layer_id, gt, preds, debug=False):
 
 
 
+class YOLOv4Model(tf.keras.Model):
+    def __init__(self, classes_num=80, image_size=(608, 608)):
 
-class YOLOv4Training(tf.keras.Model):
-    def __init__(self, input, output):
-        super(YOLOv4Training, self).__init__(input, output)
+        self.classes_num = classes_num
+        self.image_size = (image_size[0], image_size[1], 3)
+
+        input = tf.keras.Input(shape=(image_size[0], image_size[1], 3))
+        output = self.CSPDarknet53WithSPP()(input)
+        output = self.YOLOHead()(output)
+        super().__init__(input, output)
+
         self.lr_init = 1e-3
         self.lr_end = 1e-6
         self.loss_tracker = tf.keras.metrics.Mean(name="loss")
         self.lr_tracker = tf.keras.metrics.Mean(name="lr")
 
+
     def fit(self, dataset, **kwargs):
 
         start_step = 1 + kwargs['steps_per_epoch'] * kwargs['initial_epoch']
-
         self.global_steps = tf.Variable(start_step, trainable=False, dtype=tf.int32)
         self.total_steps = kwargs['epochs'] * kwargs['steps_per_epoch']
         self.warmup_steps = int(0.3 * self.total_steps)
-        super(YOLOv4Training, self).fit(dataset, **kwargs)
+        super().fit(dataset, **kwargs)
+
 
     def train_step(self, data):
 
@@ -101,70 +109,34 @@ class YOLOv4Training(tf.keras.Model):
         lr = tf.cond(self.global_steps < self.warmup_steps, lambda: lr_warmup, lambda: lr_main)
         self.optimizer.lr.assign(tf.cast(lr, dtype=tf.float32))
 
-        #print("Data")
         input, gt_boxes = data
-
         with tf.GradientTape() as tape:
-
-            #print("Infer")
             output = self(input, training=True)
-
-            #print("Loss")
             loss0 = calc_loss(0, gt_boxes, output[0])
             loss1 = calc_loss(1, gt_boxes, output[1])
             loss2 = calc_loss(2, gt_boxes, output[2])
             total_loss = loss0 + loss1 + loss2
-            #total_loss = loss0
-            #print(total_loss)
-
-            #print("Optimize")
             gradients = tape.gradient(total_loss, self.trainable_variables)
             self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
 
         self.loss_tracker.update_state(total_loss)
         self.lr_tracker.update_state(self.optimizer.lr)
-
-        #tf.print("=> TEST STEP %4d   lr: %.6f   loss: %4.2f" % (global_steps, optimizer.lr.numpy(), total_loss))
-
         self.global_steps.assign_add(1)
-        #if self.global_steps < self.warmup_steps:
-        #    lr = self.global_steps / self.warmup_steps * self.lr_init
-        #else:
-        #    lr = self.lr_end + 0.5 * (self.lr_init - self.lr_end) * (
-        #        (1 + tf.cos((self.global_steps - self.warmup_steps) / (self.total_steps - self.warmup_steps) * np.pi))
-        #    )
-        #self.optimizer.lr.assign(lr.numpy())
 
         return {"loss" : self.loss_tracker.result(), "lr" : self.lr_tracker.result()}
+
 
     @property
     def metrics(self):
         return [self.loss_tracker, self.lr_tracker]
 
 
-class YOLOv4Model:
-    def __init__(self, classes_num=80, image_size=(608, 608)):
-        self.classes_num = classes_num
-        self.image_size = (image_size[0], image_size[1], 3)
-        input = tf.keras.Input(shape=(image_size[0], image_size[1], 3))
-        output = self.CSPDarknet53WithSPP()(input)
-        output = self.YOLOHead()(output)
-        self.model = YOLOv4Training(input, output)
-        self.model.supervisor = self
-
-    def summary(self):
-        self.model.summary()
-
 
     def load_weights(self, weights_file):
         if weights_file.endswith(".h5"):
-            self._load_weights_tf(weights_file)
+            super().load_weights(weights_file)
         else:
             self._load_weights_yolo(weights_file)
-
-    def save_weights(self, weights_file):
-        self._save_weights_tf(weights_file)
-
 
     def _load_weights_yolo(self, weights_file):
         with open(weights_file, "rb") as f:
@@ -178,7 +150,7 @@ class YOLOv4Model:
                 conv_layer_name = "conv2d_%d" % i if i > 0 else "conv2d"
                 bn_layer_name = "batch_normalization_%d" % j if j > 0 else "batch_normalization"
 
-                conv_layer = self.model.get_layer(conv_layer_name)
+                conv_layer = self.get_layer(conv_layer_name)
                 in_dim = conv_layer.input_shape[-1]
                 filters = conv_layer.filters
                 size = conv_layer.kernel_size[0]
@@ -188,7 +160,7 @@ class YOLOv4Model:
                     bn_weights = np.fromfile(f, dtype=np.float32, count=4 * filters)
                     # tf weights: [gamma, beta, mean, variance]
                     bn_weights = bn_weights.reshape((4, filters))[[1, 0, 2, 3]]
-                    bn_layer = self.model.get_layer(bn_layer_name)
+                    bn_layer = self.get_layer(bn_layer_name)
                     j += 1
                 else:
                     conv_bias = np.fromfile(f, dtype=np.float32, count=filters)
@@ -206,12 +178,6 @@ class YOLOv4Model:
                     conv_layer.set_weights([conv_weights, conv_bias])
 
             assert len(f.read()) == 0, "failed to read all data"
-
-    def _save_weights_tf(self, weights_file):
-        self.model.save_weights(weights_file, save_format='h5')
-
-    def _load_weights_tf(self, weights_file):
-        self.model.load_weights(weights_file)
 
 
     def darknetConv(
@@ -348,10 +314,3 @@ class YOLOv4Model:
             return small_bbox, medium_bbox, large_bbox
 
         return feed
-
-
-    def predict(self, input):
-        return self.model.predict(input)
-
-    def __call__(self, input, training=True):
-        return self.model(input, training=training)
