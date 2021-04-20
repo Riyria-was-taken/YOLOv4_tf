@@ -33,6 +33,8 @@ class YOLOv4Pipeline:
 
             images, bboxes, classes = ops.mosaic_new(images, bboxes, classes, self._image_size)
 
+            bboxes = ops.ltrb_to_xywh(bboxes)
+
             images = dali.fn.cast(images, dtype=dali.types.FLOAT) / 255.0
             classes = dali.fn.cast(
                 dali.fn.transpose(dali.fn.stack(classes), perm=[1, 0]),

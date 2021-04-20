@@ -11,7 +11,7 @@ def input(file_root, annotations_file, device_id, num_threads, device, random_sh
         random_shuffle=random_shuffle
     )
     images = dali.fn.decoders.image(inputs, device=device, output_type=dali.types.RGB)
-    
+
     return images, bboxes, classes
 
 
@@ -53,7 +53,7 @@ def xywh_to_ltrb(bboxes):
         )
     return dali.fn.coord_transform(bboxes, M=M)
 
-    
+
 def ltrb_to_xywh(bboxes):
     Z = dali.types.Constant(0.0)
     H = dali.types.Constant(0.5)
@@ -69,7 +69,7 @@ def ltrb_to_xywh(bboxes):
     return dali.fn.coord_transform(bboxes, M=M)
 
 
-def bbox_adjust_xywh(bboxes, shape_x, shape_y, pos_x, pos_y):    
+def bbox_adjust_xywh(bboxes, shape_x, shape_y, pos_x, pos_y):
     Z = dali.types.Constant(0.0)
 
     M = dali.fn.stack(
@@ -191,7 +191,7 @@ def mosaic_new(images, bboxes, labels, image_size):
     bboxes_UR = bbox_adjust_ltrb(bboxes_UR, 1.0 - cuts_x, cuts_y, cuts_x, zeros_f)
     bboxes_LL = bbox_adjust_ltrb(bboxes_LL, cuts_x, 1.0 - cuts_y, zeros_f, cuts_y)
     bboxes_LR = bbox_adjust_ltrb(bboxes_LR, 1.0 - cuts_x, 1.0 - cuts_y, cuts_x, cuts_y)
-    stacked_bboxes = ltrb_to_xywh(dali.fn.cat(bboxes_UL, bboxes_UR, bboxes_LL, bboxes_LR)) 
+    stacked_bboxes = dali.fn.cat(bboxes_UL, bboxes_UR, bboxes_LL, bboxes_LR)
     stacked_labels = dali.fn.cat(labels_UL, labels_UR, labels_LL, labels_LR)
 
     mosaic = dali.fn.multi_paste(images, in_ids=idx, output_size=image_size, in_anchors=in_anchors,
