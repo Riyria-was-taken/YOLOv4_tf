@@ -84,7 +84,10 @@ class YOLOv4Training(tf.keras.Model):
         self.lr_tracker = tf.keras.metrics.Mean(name="lr")
 
     def fit(self, dataset, **kwargs):
-        self.global_steps = tf.Variable(1, trainable=False, dtype=tf.int32)
+
+        start_step = 1 + kwargs['steps_per_epoch'] * kwargs['initial_epoch']
+
+        self.global_steps = tf.Variable(start_step, trainable=False, dtype=tf.int32)
         self.total_steps = kwargs['epochs'] * kwargs['steps_per_epoch']
         self.warmup_steps = int(0.3 * self.total_steps)
         super(YOLOv4Training, self).fit(dataset, **kwargs)

@@ -57,6 +57,7 @@ if __name__ == "__main__":
     parser_train.add_argument("--use_gpu", "-g", default="True")
     parser_train.add_argument("--log_dir", "-l", default=None)
     parser_train.add_argument("--ckpt_dir", "-c", default=None)
+    parser_train.add_argument("--start_weights", "-w", default=None)
     subparsers.add_parser("verify")
 
     args = parser.parse_args()
@@ -72,7 +73,8 @@ if __name__ == "__main__":
             output=args.output,
             use_gpu=bool(args.use_gpu),
             log_dir=args.log_dir,
-            ckpt_dir=args.ckpt_dir
+            ckpt_dir=args.ckpt_dir,
+            start_weights=args.start_weights
         )
     else:
         print("The " + args.action + " action is not yet implemented :<")

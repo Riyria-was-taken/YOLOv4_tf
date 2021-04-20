@@ -31,9 +31,15 @@ def train(file_root, annotations_file, batch_size, epochs, steps_per_epoch, **kw
     use_gpu = kwargs.get("use_gpu", True)
     log_dir = kwargs.get("log_dir")
     ckpt_dir = kwargs.get("ckpt_dir")
+    start_weights = kwargs.get("start_weights")
+    initial_epoch = 0
 
     model = YOLOv4Model()
-    #model.load_weights("yolov4.weights")
+    if start_weights:
+        model.load_weights(start_weights)
+        fn = start_weights.split('/')[-1]
+        if fn.endswith('.h5') and fn.startswith('epoch_'):
+            initial_epoch = int(fn[6 : -3])
 
     image_size = (608, 608)
     num_threads = 1
@@ -62,6 +68,7 @@ def train(file_root, annotations_file, batch_size, epochs, steps_per_epoch, **kw
         pipeline.dataset(),
         epochs=epochs,
         steps_per_epoch=steps_per_epoch,
+        initial_epoch=initial_epoch,
         callbacks=callbacks
     )
 
