@@ -26,9 +26,11 @@ def run_infer(weights_file, labels_file, image_path, out_filename):
     else:
         draw_img(pixels)
 
-def run_training(file_root, annotations, batch_size, steps, output, use_gpu):
+def run_training(file_root, annotations, batch_size, epochs, steps_per_epoch, **kwargs):
 
-    model = train.train(file_root, annotations, batch_size, steps, use_gpu)
+    model = train.train(file_root, annotations, batch_size, epochs, steps_per_epoch, **kwargs)
+
+    output = kwargs.get("output")
     if output:
         model.save_weights(output)
 
@@ -48,10 +50,14 @@ if __name__ == "__main__":
     parser_train = subparsers.add_parser("train")
     parser_train.add_argument("file_root")
     parser_train.add_argument("annotations")
-    parser_train.add_argument("--batch_size", "-b", default="32")
-    parser_train.add_argument("--steps", "-s", default="100")
-    parser_train.add_argument("--output", "-o", default="trained.h5")
+    parser_train.add_argument("--batch_size", "-b", default="8")
+    parser_train.add_argument("--epochs", "-e", default="5")
+    parser_train.add_argument("--steps", "-s", default="1000")
+    parser_train.add_argument("--output", "-o", default="output.h5")
     parser_train.add_argument("--use_gpu", "-g", default="True")
+    parser_train.add_argument("--log_dir", "-l", default=None)
+    parser_train.add_argument("--ckpt_dir", "-c", default=None)
+    parser_train.add_argument("--start_weights", "-w", default=None)
     subparsers.add_parser("verify")
 
     args = parser.parse_args()
@@ -60,8 +66,15 @@ if __name__ == "__main__":
         run_infer(args.weights, args.classes, args.image, args.output)
     elif args.action == "train":
         batch_size = int(args.batch_size)
+        epochs = int(args.epochs)
         steps = int(args.steps)
-        use_gpu = bool(args.use_gpu)
-        run_training(args.file_root, args.annotations, batch_size, steps, args.output, use_gpu)
+        run_training(
+            args.file_root, args.annotations, batch_size, epochs, steps,
+            output=args.output,
+            use_gpu=bool(args.use_gpu),
+            log_dir=args.log_dir,
+            ckpt_dir=args.ckpt_dir,
+            start_weights=args.start_weights
+        )
     else:
         print("The " + args.action + " action is not yet implemented :<")
