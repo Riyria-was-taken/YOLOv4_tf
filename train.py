@@ -13,6 +13,8 @@ import os
 SET_MEMORY_GROWTH = False
 
 
+
+
 class SaveWeightsCallback(tf.keras.callbacks.Callback):
 
     def __init__(self, ckpt_dir):
@@ -34,22 +36,41 @@ def train(file_root, annotations_file, batch_size, epochs, steps_per_epoch, **kw
     start_weights = kwargs.get("start_weights")
     initial_epoch = 0
 
-    model = YOLOv4Model()
+
+    strategy = tf.distribute.MirroredStrategy()
+
+    with strategy.scope():
+        model = YOLOv4Model()
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam()
+        )
+
     if start_weights:
         model.load_weights(start_weights)
         fn = start_weights.split('/')[-1]
         if fn.endswith('.h5') and fn.startswith('epoch_'):
             initial_epoch = int(fn[6 : -3])
 
-    image_size = (608, 608)
-    num_threads = 1
-    device_id = 0
-    seed = int.from_bytes(os.urandom(4), "little")
 
-    pipeline = YOLOv4Pipeline(
-        file_root, annotations_file, batch_size, image_size, num_threads, device_id, seed, use_gpu
-    )
-    dataset = pipeline.dataset()
+    def dataset_fn(input_context):
+        with tf.device("/gpu:{}".format(input_context.input_pipeline_id)):
+            device_id = input_context.input_pipeline_id
+            num_threads = input_context.num_input_pipelines
+            image_size = (608, 608)
+            seed = int.from_bytes(os.urandom(4), "little")
+
+            pipeline = YOLOv4Pipeline(
+                file_root, annotations_file, batch_size, image_size, num_threads, device_id, seed, use_gpu
+            )
+            return pipeline.dataset()
+
+    input_options = tf.distribute.InputOptions(
+        experimental_place_dataset_on_device = True,
+        experimental_prefetch_to_device = False,
+        experimental_replication_mode = tf.distribute.InputReplicationMode.PER_REPLICA)
+
+    dataset = strategy.distribute_datasets_from_function(dataset_fn, input_options)
+
 
     callbacks = []
     if log_dir:
@@ -60,12 +81,8 @@ def train(file_root, annotations_file, batch_size, epochs, steps_per_epoch, **kw
     if ckpt_dir:
         callbacks.append(SaveWeightsCallback(ckpt_dir))
 
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam()
-    )
-
     model.fit(
-        pipeline.dataset(),
+        dataset,
         epochs=epochs,
         steps_per_epoch=steps_per_epoch,
         initial_epoch=initial_epoch,
