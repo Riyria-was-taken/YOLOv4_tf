@@ -1,4 +1,5 @@
 import nvidia.dali as dali
+import numpy as np
 
 def input(file_root, annotations_file, device_id, num_threads, device, random_shuffle=True):
     inputs, bboxes, classes = dali.fn.readers.coco(
@@ -68,6 +69,23 @@ def ltrb_to_xywh(bboxes):
         )
     return dali.fn.coord_transform(bboxes, M=M)
 
+def bbox_flip_xywh(bboxes):
+    O = dali.types.Constant(1.0)
+    MO = dali.types.Constant(-1.0)
+    Z = dali.types.Constant(0.0)
+    M = dali.fn.stack(
+            dali.fn.stack(MO, Z, Z, Z),
+            dali.fn.stack(Z, O, Z, Z),
+            dali.fn.stack(Z, Z, O, Z),
+            dali.fn.stack(Z, Z, Z, O)
+    )
+    T = dali.fn.stack(O, Z, Z, Z)
+    return dali.fn.coord_transform(bboxes, M=M, T=T)
+
+
+def bbox_flip_ltrb(bboxes):
+    return xywh_to_ltrb(bbox_flip_xywh(ltrb_to_xywh(bboxes)))
+
 
 def bbox_adjust_xywh(bboxes, shape_x, shape_y, pos_x, pos_y):
     Z = dali.types.Constant(0.0)
@@ -134,6 +152,49 @@ def mosaic(images, bboxes, labels, image_size):
     return images, bboxes, labels
 
 
+def random_scale(max_change):
+    scales = dali.fn.random.uniform(range=[1, max_change])
+    invert = dali.fn.random.coin_flip()
+    return invert * (1.0 / scales) + (1.0 - invert) * scales
+
+
+def simple_image_augument(images, bboxes):
+    brightness = random_scale(1.5)
+    contrast = random_scale(1.5)
+    hue = dali.fn.random.uniform(range=[-18.0, 18.0]) 
+
+    images = dali.fn.color_twist(images, 
+        hue=hue,
+        brightness=brightness,
+        contrast=contrast,
+    )
+    
+    flipped = dali.fn.flip(images)
+    flipped_bb = bbox_flip_ltrb(bboxes)
+
+    if_flip = dali.fn.random.coin_flip()
+
+    images = if_flip * flipped + (1 - if_flip) * images
+    bboxes = if_flip * flipped_bb + (1 - if_flip) * bboxes
+
+    return images, bboxes
+
+# Works for 2 dimensional tesors with equal second dimension
+def select(bool_TL, if_true, if_false):
+    true_shape = dali.fn.cast(dali.fn.shapes(if_true), dtype=dali.types.DALIDataType.INT32)
+    false_shape = dali.fn.cast(dali.fn.shapes(if_false), dtype=dali.types.DALIDataType.INT32)
+
+    joined = dali.fn.cat(if_true, if_false)
+    sh = bool_TL * true_shape + (1 - bool_TL) * false_shape
+
+    st = dali.fn.cat(
+            dali.fn.slice(true_shape * (1 - bool_TL), start=[0], shape=[1], axes=[0]),
+            dali.fn.slice(true_shape * 0, start=[1], shape=[1], axes=[0])
+        )
+    
+    return dali.fn.slice(joined, start=st, shape=sh, axes=[0,1])
+
+
 def mosaic_new(images, bboxes, labels, image_size):
     zeros = dali.fn.constant(idata=0, shape=[])
     zeros_f = dali.fn.constant(fdata=0.0, shape=[])
@@ -164,6 +225,8 @@ def mosaic_new(images, bboxes, labels, image_size):
 
         return idx, bbx, lbl, in_anchor_c, shape
 
+    images, bboxes = simple_image_augument(images, bboxes)
+    
     perm_UL, bboxes_UL, labels_UL, in_anchor_UL, size_UL = \
         generate_tiles(bboxes, labels, prop_x, prop_y)
     perm_UR, bboxes_UR, labels_UR, in_anchor_UR, size_UR = \
@@ -197,4 +260,16 @@ def mosaic_new(images, bboxes, labels, image_size):
     mosaic = dali.fn.multi_paste(images, in_ids=idx, output_size=image_size, in_anchors=in_anchors,
                                  shapes=shapes, out_anchors=out_anchors, dtype=dali.types.DALIDataType.UINT8)
 
-    return mosaic, stacked_bboxes, stacked_labels
+    # Only 50% images should be mosaic
+    use_mosaic = dali.fn.random.coin_flip()
+    images_out = use_mosaic * mosaic + (1.0 - use_mosaic) * images
+
+    bboxes_out = select(use_mosaic, stacked_bboxes, bboxes)
+    
+    stacked_labels = dali.fn.expand_dims(stacked_labels, axes=1)
+    labels = dali.fn.expand_dims(labels, axes=1)
+    labels_out = select(use_mosaic, stacked_labels, labels)
+    labels_out = dali.fn.squeeze(labels_out, axes=1)
+
+
+    return images_out, bboxes_out, labels_out
